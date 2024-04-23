@@ -1152,6 +1152,13 @@ impl Config {
         self.local_transport_params.disable_active_migration = v;
     }
 
+    /// Sets the `enable_server_congestion_resume` transport parameter.
+    ///
+    /// The default value is `false`.
+    pub fn set_enable_server_congestion_resume(&mut self, v: bool) {
+        self.local_transport_params.enable_server_congestion_resume = v;
+    }
+
     /// Sets the congestion control algorithm used by string.
     ///
     /// The default value is `cubic`. On error `Error::CongestionControl`
@@ -7858,6 +7865,8 @@ pub struct TransportParams {
     /// DATAGRAM frame extension parameter, if any.
     pub max_datagram_frame_size: Option<u64>,
     // pub preferred_address: ...,
+    // Quiche extension
+    pub enable_server_congestion_resume: bool,
 }
 
 impl Default for TransportParams {
@@ -7880,6 +7889,7 @@ impl Default for TransportParams {
             initial_source_connection_id: None,
             retry_source_connection_id: None,
             max_datagram_frame_size: None,
+            enable_server_congestion_resume: true,
         }
     }
 }
