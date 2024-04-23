@@ -54,6 +54,7 @@ pub struct CommonArgs {
     pub qpack_max_table_capacity: Option<u64>,
     pub qpack_blocked_streams: Option<u64>,
     pub initial_cwnd_packets: u64,
+    pub enable_server_congestion_resume: bool,
 }
 
 /// Creates a new `CommonArgs` structure using the provided [`Docopt`].
@@ -243,6 +244,7 @@ impl Default for CommonArgs {
             qpack_max_table_capacity: None,
             qpack_blocked_streams: None,
             initial_cwnd_packets: 10,
+            enable_server_congestion_resume: false,
         }
     }
 }
@@ -289,6 +291,7 @@ Options:
   --session-file PATH      File used to cache a TLS session for resumption.
   --source-port PORT       Source port to use when connecting to the server [default: 0].
   --initial-cwnd-packets PACKETS   The initial congestion window size in terms of packet count [default: 10].
+  --enable-server-congestion-resume     Enables the server congestion resume.
   -h --help                Show this screen.
 ";
 
@@ -309,6 +312,7 @@ pub struct ClientArgs {
     pub source_port: u16,
     pub perform_migration: bool,
     pub send_priority_update: bool,
+    pub enable_server_congestion_resume: bool,
 }
 
 impl Args for ClientArgs {
@@ -385,6 +389,7 @@ impl Args for ClientArgs {
         let perform_migration = args.get_bool("--perform-migration");
 
         let send_priority_update = args.get_bool("--send-priority-update");
+        let enable_server_congestion_resume = args.get_bool("--enable-server-congestion-resume")
 
         ClientArgs {
             version,
@@ -402,6 +407,7 @@ impl Args for ClientArgs {
             source_port,
             perform_migration,
             send_priority_update,
+            enable_server_congestion_resume,
         }
     }
 }
@@ -424,6 +430,7 @@ impl Default for ClientArgs {
             source_port: 0,
             perform_migration: false,
             send_priority_update: false,
+            enable_server_congestion_resume: false,
         }
     }
 }
@@ -464,6 +471,7 @@ Options:
   --disable-gso               Disable GSO (linux only).
   --disable-pacing            Disable pacing (linux only).
   --initial-cwnd-packets PACKETS      The initial congestion window size in terms of packet count [default: 10].
+  --enable-server-congestion-resume     Enables the server congestion resume.
   -h --help                   Show this screen.
 ";
 
@@ -478,6 +486,7 @@ pub struct ServerArgs {
     pub disable_gso: bool,
     pub disable_pacing: bool,
     pub enable_pmtud: bool,
+    pub enable_server_congestion_resume: bool,
 }
 
 impl Args for ServerArgs {
@@ -493,6 +502,7 @@ impl Args for ServerArgs {
         let disable_gso = args.get_bool("--disable-gso");
         let disable_pacing = args.get_bool("--disable-pacing");
         let enable_pmtud = args.get_bool("--enable-pmtud");
+        let enable_server_congestion_resume = args.get_bool("--enable-server-congestion-resume")
 
         ServerArgs {
             listen,
@@ -504,6 +514,7 @@ impl Args for ServerArgs {
             disable_gso,
             disable_pacing,
             enable_pmtud,
+            enable_server_congestion_resume,
         }
     }
 }
