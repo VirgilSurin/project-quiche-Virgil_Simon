@@ -192,6 +192,8 @@ impl Args for CommonArgs {
             .parse::<u64>()
             .unwrap();
 
+        let enable_server_congestion_resume = args.get_bool("--enable-server-congestion-resume");
+
         CommonArgs {
             alpns,
             max_data,
@@ -215,6 +217,7 @@ impl Args for CommonArgs {
             qpack_max_table_capacity,
             qpack_blocked_streams,
             initial_cwnd_packets,
+            enable_server_congestion_resume,
         }
     }
 }
@@ -389,7 +392,7 @@ impl Args for ClientArgs {
         let perform_migration = args.get_bool("--perform-migration");
 
         let send_priority_update = args.get_bool("--send-priority-update");
-        let enable_server_congestion_resume = args.get_bool("--enable-server-congestion-resume")
+        let enable_server_congestion_resume = args.get_bool("--enable-server-congestion-resume");
 
         ClientArgs {
             version,
@@ -502,7 +505,7 @@ impl Args for ServerArgs {
         let disable_gso = args.get_bool("--disable-gso");
         let disable_pacing = args.get_bool("--disable-pacing");
         let enable_pmtud = args.get_bool("--enable-pmtud");
-        let enable_server_congestion_resume = args.get_bool("--enable-server-congestion-resume")
+        let enable_server_congestion_resume = args.get_bool("--enable-server-congestion-resume");
 
         ServerArgs {
             listen,

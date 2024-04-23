@@ -742,6 +742,8 @@ pub struct Config {
     max_stream_window: u64,
 
     disable_dcid_reuse: bool,
+
+    enable_server_congestion_resume: bool,
 }
 
 // See https://quicwg.org/base-drafts/rfc9000.html#section-15
@@ -808,6 +810,8 @@ impl Config {
             max_stream_window: stream::MAX_STREAM_WINDOW,
 
             disable_dcid_reuse: false,
+
+            enable_server_congestion_resume: false,
         })
     }
 
@@ -1269,6 +1273,10 @@ impl Config {
     /// The default value is `false`.
     pub fn set_disable_dcid_reuse(&mut self, v: bool) {
         self.disable_dcid_reuse = v;
+    }
+
+    pub fn set_enable_server_congestion_resume(&mut self, v: bool) {
+        self.enable_server_congestion_resume = v;
     }
 }
 
