@@ -7866,6 +7866,7 @@ pub struct TransportParams {
     /// DATAGRAM frame extension parameter, if any.
     pub max_datagram_frame_size: Option<u64>,
     // pub preferred_address: ...,
+    pub enable_server_congestion_resume: bool,
 }
 
 impl Default for TransportParams {
@@ -7888,6 +7889,7 @@ impl Default for TransportParams {
             initial_source_connection_id: None,
             retry_source_connection_id: None,
             max_datagram_frame_size: None,
+            enable_server_congestion_resume: false,
         }
     }
 }
@@ -8037,6 +8039,10 @@ impl TransportParams {
                 0x0020 => {
                     tp.max_datagram_frame_size = Some(val.get_varint()?);
                 },
+                // 0x0030 => {
+                //     tp.enable_server_congestion_resume = true;
+                // },
+                // NOTE: maybe useful ?
 
                 // Ignore unknown parameters.
                 _ => (),

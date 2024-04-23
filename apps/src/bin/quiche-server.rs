@@ -624,6 +624,7 @@ fn main() {
 
             !c.conn.is_closed()
         });
+        println!("COUCOU", );
     }
 }
 
