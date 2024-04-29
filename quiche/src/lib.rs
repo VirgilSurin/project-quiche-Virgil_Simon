@@ -8039,10 +8039,10 @@ impl TransportParams {
                 0x0020 => {
                     tp.max_datagram_frame_size = Some(val.get_varint()?);
                 },
-                // 0x0030 => {
-                //     tp.enable_server_congestion_resume = true;
-                // },
-                // NOTE: maybe useful ?
+
+                0x0030 => {
+                    tp.enable_server_congestion_resume = true;
+                },
 
                 // Ignore unknown parameters.
                 _ => (),
@@ -8204,6 +8204,10 @@ impl TransportParams {
                 octets::varint_len(max_datagram_frame_size),
             )?;
             b.put_varint(max_datagram_frame_size)?;
+        }
+
+        if tp.enable_server_congestion_resume {
+            TransportParams::encode_param(&mut b, 0x0030, 0)?;
         }
 
         let out_len = b.off();
