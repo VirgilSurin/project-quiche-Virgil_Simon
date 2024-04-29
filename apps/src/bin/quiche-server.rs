@@ -126,7 +126,7 @@ fn main() {
 
     config.set_max_connection_window(conn_args.max_window);
     config.set_max_stream_window(conn_args.max_stream_window);
-
+    config.set_enable_server_congestion_resume(conn_args.enable_server_congestion_resume);
     config.enable_pacing(pacing);
 
     let mut keylog = None;

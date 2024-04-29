@@ -81,6 +81,7 @@ pub struct CommonArgs {
 /// --qpack-max-table-capacity BYTES  Max capacity of dynamic QPACK decoding.
 /// --qpack-blocked-streams STREAMS  Limit of blocked streams while decoding.
 /// --initial-cwnd-packets      Size of initial congestion window, in packets.
+/// --enable-server-congestion-resume     Enables the server congestion resume.
 ///
 /// [`Docopt`]: https://docs.rs/docopt/1.1.0/docopt/
 impl Args for CommonArgs {

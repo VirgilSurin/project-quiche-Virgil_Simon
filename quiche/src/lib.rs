@@ -9087,6 +9087,16 @@ mod tests {
     }
 
     #[test]
+    fn negotiate_congestion_resume() {
+
+        let mut pipe = testing::Pipe::new().unwrap();
+        pipe.client.local_transport_params.enable_server_congestion_resume = true;
+        pipe.server.local_transport_params.enable_server_congestion_resume = false;
+        assert_eq!(pipe.handshake(), Ok(()));
+
+    }
+
+    #[test]
     fn handshake_done() {
         let mut pipe = testing::Pipe::new().unwrap();
 
