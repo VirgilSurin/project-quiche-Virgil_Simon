@@ -54,6 +54,14 @@ pub struct EcnCounts {
     ecn_ce_count: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CCS_DATA {
+    // Congestion Control State
+    conn_window: u64, // Connection Window Size
+    s_s_threshold: u64, // Slow Start Threshold
+    csstate: Vec<u8>, // Congestion Control State data from CCS algorithm
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub enum Frame {
     Padding {
@@ -183,6 +191,22 @@ pub enum Frame {
 
     DatagramHeader {
         length: usize,
+    },
+
+    CCIndication {
+        // MUST be sent by the server!
+        epoch: u64, // Increasing timing information
+        // The lengths of the CCS and the Hash are given in the buffer
+        ccs: Vec<u8>, // Congestion Control State in the form of a serialized Vector
+        hash: Vec<u8>, // A cryptographic hash value in the form of a serialized Vector
+    },
+
+    CCResume {
+        // MUST be sent by the client!
+        epoch: u64, // Increasing timing information
+        // The lengths of the CCS and the Hash are given in the buffer
+        ccs: Vec<u8>, // Congestion Control State in the form of a serialized Vector
+        hash: Vec<u8>, // A cryptographic hash value in the form of a serialized Vector
     },
 }
 
@@ -330,6 +354,30 @@ impl Frame {
             0x1e => Frame::HandshakeDone,
 
             0x30 | 0x31 => parse_datagram_frame(frame_type, b)?,
+
+            0x86e32420 => {
+                // CC_Indication
+
+                Frame::CCIndication {
+                    epoch: b.get_varint()?, // epoch
+                    // reads the length of the ccs in bytes in the buffer, advances the buffer and reads the ccs, all in a single function
+                    ccs: b.get_bytes_with_varint_length()?.to_vec(),
+                    // same as above but for the hash
+                    hash: b.get_bytes_with_varint_length()?.to_vec(),
+                }
+            },
+
+            0x86e32421 => {
+                // CC_Resume
+
+                Frame::CCResume {
+                    epoch: b.get_varint()?, // epoch
+                    // reads the length of the ccs in bytes in the buffer, advances the buffer and reads the ccs, all in a single function
+                    ccs: b.get_bytes_with_varint_length()?.to_vec(),
+                    // same as above but for the hash
+                    hash: b.get_bytes_with_varint_length()?.to_vec(),
+                }
+            },
 
             _ => return Err(Error::InvalidFrame),
         };
@@ -593,6 +641,25 @@ impl Frame {
             },
 
             Frame::DatagramHeader { .. } => (),
+
+            Frame::CCIndication { epoch, ccs, hash } => {
+                b.put_varint(0x86e32420)?; // CC_Indication
+                b.put_varint(*epoch)?; // epoch
+                b.put_varint(ccs.len() as u64)?; // length of ccs in bytes
+                b.put_bytes(ccs.as_ref())?; // ccs
+                b.put_varint(hash.len() as u64)?; // length of hash in bytes
+                b.put_bytes(hash.as_ref())?; // hash
+            },
+
+            Frame::CCResume { epoch, ccs, hash } => {
+                b.put_varint(0x86e32421)?; // CC_Resume
+                b.put_varint(*epoch)?; // epoch
+                b.put_varint(ccs.len() as u64)?; // length of ccs in bytes
+                b.put_bytes(ccs.as_ref())?; // ccs
+                b.put_varint(hash.len() as u64)?; // length of hash in bytes
+                b.put_bytes(hash.as_ref())?; // hash
+            },
+            
         }
 
         Ok(before - b.cap())
@@ -808,6 +875,25 @@ impl Frame {
                 2 + // length, always encode as 2-byte varint
                 *length // data
             },
+
+            Frame::CCIndication { epoch, ccs, hash } => {
+                1 + // frame type
+                octets::varint_len(*epoch) + // epoch
+                octets::varint_len(ccs.len() as u64) + // ccs length
+                ccs.len() + // ccs
+                octets::varint_len(hash.len() as u64) + // hash length
+                hash.len() // hash
+
+            },
+
+            Frame::CCResume { epoch, ccs, hash } => {
+                1 + // frame type
+                octets::varint_len(*epoch) + // epoch
+                octets::varint_len(ccs.len() as u64) + // ccs length
+                ccs.len() + // ccs
+                octets::varint_len(hash.len() as u64) + // hash length
+                hash.len() // hash
+            },
         }
     }
 
@@ -834,6 +920,8 @@ impl Frame {
 
     #[cfg(feature = "qlog")]
     pub fn to_qlog(&self) -> QuicFrame {
+        use std::fmt::format;
+
         match self {
             Frame::Padding { .. } => QuicFrame::Padding,
 
@@ -1020,6 +1108,18 @@ impl Frame {
                 length: *length as u64,
                 raw: None,
             },
+
+            Frame::CCIndication { epoch, ccs, hash } => QuicFrame::CCIndication {
+                epoch: *epoch,
+                ccs: format!("{}", qlog::HexSlice::new(ccs)),
+                hash: format!("{}", qlog::HexSlice::new(hash)),
+            },
+
+            Frame::CCResume { epoch, ccs, hash } => QuicFrame::CCResume {
+                epoch: *epoch,
+                ccs: format!("{}", qlog::HexSlice::new(ccs)), // Raw String, TODO! format
+                hash: format!("{}", qlog::HexSlice::new(hash)), // Raw String, TODO! format
+            },
         }
     }
 }
@@ -1186,6 +1286,12 @@ impl std::fmt::Debug for Frame {
 
             Frame::DatagramHeader { length } => {
                 write!(f, "DATAGRAM len={length}")?;
+            },
+            Frame::CCIndication { epoch, ccs, hash } => {
+                write!(f, "CC_INDICATION epoch={epoch} ccs={ccs:02x?} hash={hash:02x?}",)?;
+            },
+            Frame::CCResume { epoch, ccs, hash } => {
+                write!(f, "CC_RESUME epoch={epoch} ccs={ccs:02x?} hash={hash:02x?}",)?;
             },
         }
 

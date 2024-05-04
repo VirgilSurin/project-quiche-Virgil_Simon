@@ -1137,6 +1137,8 @@ impl Recovery {
     pub fn send_quantum(&self) -> usize {
         self.send_quantum
     }
+    
+    //TODO! impl créer frame
 }
 
 /// Available congestion control algorithms.

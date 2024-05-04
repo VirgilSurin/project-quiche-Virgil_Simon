@@ -4163,6 +4163,9 @@ impl Connection {
             do_dgram = true;
         }
 
+        //TODO! Send CC_Indication frame (insp. datagram pour le if)
+        //push_frame_to_pkt!(b, frames, todo créer frame, left)
+
         // Create DATAGRAM frame.
         if (pkt_type == packet::Type::Short || pkt_type == packet::Type::ZeroRTT) &&
             left > frame::MAX_DGRAM_OVERHEAD &&
@@ -7315,6 +7318,11 @@ impl Connection {
             },
 
             frame::Frame::DatagramHeader { .. } => unreachable!(),
+            
+            //recevoir une frame
+            frame::Frame::CCIndication { epoch, ccs, hash } => {todo!()},
+
+            frame::Frame::CCResume { epoch, ccs, hash } => {todo!()},
         }
 
         Ok(())
@@ -8040,7 +8048,7 @@ impl TransportParams {
                     tp.max_datagram_frame_size = Some(val.get_varint()?);
                 },
 
-                0x0030 => {
+                0x29b69af11c60fbca => {
                     tp.enable_server_congestion_resume = true;
                 },
 
@@ -8207,7 +8215,7 @@ impl TransportParams {
         }
 
         if tp.enable_server_congestion_resume {
-            TransportParams::encode_param(&mut b, 0x0030, 0)?;
+            TransportParams::encode_param(&mut b, 0x29b69af11c60fbca, 0)?;
         }
 
         let out_len = b.off();
@@ -8800,7 +8808,7 @@ mod tests {
             ack_delay_exponent: 20,
             max_ack_delay: 2_u64.pow(14) - 1,
             disable_active_migration: true,
-            enable_server_congestion_resume: false,
+            enable_server_congestion_resume: true,
             active_conn_id_limit: 8,
             initial_source_connection_id: Some(b"woot woot".to_vec().into()),
             retry_source_connection_id: Some(b"retry".to_vec().into()),
@@ -8831,7 +8839,7 @@ mod tests {
             ack_delay_exponent: 20,
             max_ack_delay: 2_u64.pow(14) - 1,
             disable_active_migration: true,
-            enable_server_congestion_resume: false,
+            enable_server_congestion_resume: true,
             active_conn_id_limit: 8,
             initial_source_connection_id: Some(b"woot woot".to_vec().into()),
             retry_source_connection_id: None,
