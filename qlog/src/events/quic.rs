@@ -373,6 +373,7 @@ pub enum QuicFrameTypeName {
     HandshakeDone,
     Datagram,
     Unknown,
+    CCIndication,
 }
 
 #[serde_with::skip_serializing_none]
@@ -491,6 +492,18 @@ pub enum QuicFrame {
         length: u64,
 
         raw: Option<Bytes>,
+    },
+
+    CCIndication {
+        epoch: u64,
+        ccs: Bytes,
+        hash: Bytes,
+    },
+
+    CCResume {
+        epoch: u64,
+        ccs: Bytes,
+        hash: Bytes,
     },
 
     Unknown {

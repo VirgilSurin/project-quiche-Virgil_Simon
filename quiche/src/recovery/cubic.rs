@@ -56,6 +56,8 @@ pub static CUBIC: CongestionControlOps = CongestionControlOps {
     rollback,
     has_custom_pacing,
     debug_fmt,
+    //serrialize,
+    //deserialize,
 };
 
 /// CUBIC Constants.
