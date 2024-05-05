@@ -92,14 +92,14 @@ pub struct State {
 
     alpha_aimd: f64,
 
-    #[serde(skip)]
+    #[serde(skip)] // Idk if this is needed for Congestion Control Resuming but serde won't serialize it
     // Used in CUBIC fix (see on_packet_sent())
     last_sent_time: Option<Instant>,
 
     // Store cwnd increment during congestion avoidance.
     cwnd_inc: usize,
 
-    #[serde(skip)]
+    #[serde(skip)] // Idk if this is needed for Congestion Control Resuming but serde won't serialize it
     // CUBIC state checkpoint preceding the last congestion event.
     prior: PriorState,
 }
@@ -441,6 +441,9 @@ fn debug_fmt(r: &Recovery, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     )
 }
 
+// Serialization and Deserialization
+// Credits to Alessandro Spinozi for having informed me about Serde!
+// Serde may cause an error, this is why we return a Result
 fn serrialize_ccs_data(r: &Recovery) -> crate::Result<Vec<u8>> {
     rmp_serde::to_vec(&r.cubic_state).map_err(|e| crate::Error::CongestionControl)
 }

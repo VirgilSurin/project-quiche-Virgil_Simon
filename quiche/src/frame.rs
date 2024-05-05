@@ -54,14 +54,6 @@ pub struct EcnCounts {
     ecn_ce_count: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CCS_DATA {
-    // Congestion Control State
-    conn_window: u64, // Connection Window Size
-    s_s_threshold: u64, // Slow Start Threshold
-    csstate: Vec<u8>, // Congestion Control State data from CCS algorithm
-}
-
 #[derive(Clone, PartialEq, Eq)]
 pub enum Frame {
     Padding {
@@ -195,7 +187,7 @@ pub enum Frame {
 
     CCIndication {
         // MUST be sent by the server!
-        epoch: u64, // Increasing timing information
+        epoch: u64, // To transform into packet::Epoch?
         // The lengths of the CCS and the Hash are given in the buffer
         ccs: Vec<u8>, // Congestion Control State in the form of a serialized Vector
         hash: Vec<u8>, // A cryptographic hash value in the form of a serialized Vector

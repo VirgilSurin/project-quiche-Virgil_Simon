@@ -165,6 +165,7 @@ fn debug_fmt(_r: &Recovery, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
     Ok(())
 }
 
+// TODO: Implement serialization and deserialization for CCS data; not used for now.
 fn serrialize_ccs_data(_r: &Recovery) -> crate::Result<Vec<u8>> {todo!()}
 fn deserialize_ccs_data(_r: &mut Recovery, data: &[u8]) {todo!()}
 
