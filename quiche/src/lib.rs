@@ -1491,6 +1491,9 @@ pub struct Connection {
 
     /// The number of streams stopped by remote.
     stopped_stream_remote_count: u64,
+
+    /// True if server_congestion_resume is active for this connection
+    enable_server_congestion_resume: bool,
 }
 
 /// Creates a new server-side connection.
@@ -1927,6 +1930,8 @@ impl Connection {
             stopped_stream_local_count: 0,
             reset_stream_remote_count: 0,
             stopped_stream_remote_count: 0,
+
+            enable_server_congestion_resume: false,
         };
 
         if let Some(odcid) = odcid {
@@ -6623,11 +6628,17 @@ impl Connection {
             );
         }
 
+
         // Record the max_active_conn_id parameter advertised by the peer.
         self.ids
             .set_source_conn_id_limit(peer_params.active_conn_id_limit);
 
         self.peer_transport_params = peer_params;
+
+        self.enable_server_congestion_resume = self.peer_transport_params.enable_server_congestion_resume && self.local_transport_params.enable_server_congestion_resume;
+        println!("RES: {:?}", self.enable_server_congestion_resume);
+        println!("Peer: {:?}", self.peer_transport_params.enable_server_congestion_resume);
+        println!("Local: {:?}", self.local_transport_params.enable_server_congestion_resume);
 
         Ok(())
     }
@@ -7866,6 +7877,7 @@ pub struct TransportParams {
     /// DATAGRAM frame extension parameter, if any.
     pub max_datagram_frame_size: Option<u64>,
     // pub preferred_address: ...,
+    /// flag
     pub enable_server_congestion_resume: bool,
 }
 

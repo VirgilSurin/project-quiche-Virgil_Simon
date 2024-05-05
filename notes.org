@@ -1,0 +1,10 @@
+#+title: NOTES
+
+* Test du l'argument --enable-server-congestion-resume
+Client
+#+begin_src bash
+cargo run --bin quiche-client -- --no-verify --enable-server-congestion-resume https://127.0.0.1:4433/Cargo.toml
+#+end_src
+Server
+#+begin_src bash
+cargo run --bin quiche-server --release -- --cert apps/src/bin/cert.crt --key apps/src/bin/cert.key --listen 0.0.0.0:4433 --enable-server-congestion-resume --root .#+end_src

@@ -171,6 +171,7 @@ fn main() {
     let mut clients_ids = ClientIdMap::new();
     let mut clients = ClientMap::new();
 
+
     let mut pkt_count = 0;
 
     let mut continue_write = false;
@@ -204,7 +205,9 @@ fn main() {
             }
 
             let (len, from) = match socket.recv_from(&mut buf) {
-                Ok(v) => v,
+                Ok(v) => {
+                    v
+                },
 
                 Err(e) => {
                     // There are no more UDP packets to read, so end the read
@@ -238,7 +241,10 @@ fn main() {
                 pkt_buf,
                 quiche::MAX_CONN_ID_LEN,
             ) {
-                Ok(v) => v,
+                Ok(v) => {
+                    println!("{:?}", conn_args.enable_server_congestion_resume);
+                    v
+                },
 
                 Err(e) => {
                     error!("Parsing packet header failed: {:?}", e);
@@ -624,7 +630,6 @@ fn main() {
 
             !c.conn.is_closed()
         });
-        println!("COUCOU", );
     }
 }
 
