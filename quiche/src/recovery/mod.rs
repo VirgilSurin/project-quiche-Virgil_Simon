@@ -1208,6 +1208,12 @@ pub struct CongestionControlOps {
 
     pub debug_fmt:
         fn(r: &Recovery, formatter: &mut std::fmt::Formatter) -> std::fmt::Result,
+
+    pub serrialize_ccs_data:
+        fn(r: &Recovery) -> crate::Result<Vec<u8>>,
+
+    pub deserialize_ccs_data:
+        fn(r: &mut Recovery, data: &[u8]),
 }
 
 impl From<CongestionControlAlgorithm> for &'static CongestionControlOps {
