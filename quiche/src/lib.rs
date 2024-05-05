@@ -419,6 +419,8 @@ use std::collections::VecDeque;
 
 use smallvec::SmallVec;
 
+use serde_json;
+
 /// The current QUIC wire version.
 pub const PROTOCOL_VERSION: u32 = PROTOCOL_VERSION_V1;
 
@@ -575,6 +577,9 @@ pub enum Error {
 
     /// The peer sent more data in CRYPTO frames than we can buffer.
     CryptoBufferExceeded,
+
+    /// Protocal violation, the frame is illegal
+    ProtocolViolation,
 }
 
 impl Error {
@@ -617,6 +622,7 @@ impl Error {
             Error::OutOfIdentifiers => -18,
             Error::KeyUpdate => -19,
             Error::CryptoBufferExceeded => -20,
+            Error::ProtocolViolation => -21,
         }
     }
 }
@@ -744,6 +750,25 @@ pub struct Config {
     disable_dcid_reuse: bool,
 
     enable_server_congestion_resume: bool,
+}
+
+fn init_encryption() -> Result<(Aes256Gcm, Nonce), aes_gcm::Error> {
+    let key = Key::from_slice(b"an example very very secret key."); // 32 bytes
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Nonce::from_slice(b"unique nonce"); // 12 bytes; must be unique per message
+    Ok((cipher, nonce))
+}
+
+// Define a function to encrypt data
+fn encrypt_data(data: &[u8], cipher: &Aes256Gcm, nonce: &Nonce) -> Result<Vec<u8>, aes_gcm::aead::Error> {
+    cipher.encrypt(nonce, data)
+}
+
+// Define a function to write encrypted data to a file
+fn write_encrypted_data_to_file(data: &[u8], filename: &str) -> Result<(), IoError> {
+    let mut file = File::create(filename)?;
+    file.write_all(data)?;
+    Ok(())
 }
 
 // See https://quicwg.org/base-drafts/rfc9000.html#section-15
@@ -7331,9 +7356,28 @@ impl Connection {
             frame::Frame::DatagramHeader { .. } => unreachable!(),
             
             //recevoir une frame
-            frame::Frame::CCIndication { epoch, ccs, hash } => {todo!()},
+            frame::Frame::CCIndication { epoch, ccs, hash } => {
+                if self.is_server() {
+                    return Err(Error::ProtocolViolation);
+                }
+                // Serialize ccs as JSON before encryption
+                let ccs_json = serde_json::to_vec(&ccs).map_err(|_| Error::InternalError)?;
 
-            frame::Frame::CCResume { epoch, ccs, hash } => {todo!()},
+                // Initialize encryption
+                let (cipher, nonce) = init_encryption().map_err(|_| Error::InternalError)?;
+
+                // Encrypt ccs data
+                let encrypted_data = encrypt_data(&ccs_json, &cipher, &nonce).map_err(|_| Error::InternalError)?;
+
+                // Write encrypted data to a file
+                write_encrypted_data_to_file(&encrypted_data, "encrypted_ccs_data.bin").map_err(|_| Error::InternalError)?;
+            },
+
+            frame::Frame::CCResume { epoch, ccs, hash } => {
+                if !self.is_server() {
+                    return Err(Error::ProtocolViolation);
+                }
+            },
         }
 
         Ok(())
