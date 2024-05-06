@@ -46,6 +46,8 @@ pub static BBR2: CongestionControlOps = CongestionControlOps {
     rollback,
     has_custom_pacing,
     debug_fmt,
+    serrialize_ccs_data,
+    deserialize_ccs_data,
 };
 
 /// The static discount factor of 1% used to scale BBR.bw to produce
@@ -670,6 +672,10 @@ fn debug_fmt(r: &Recovery, f: &mut std::fmt::Formatter) -> std::fmt::Result {
     )?;
     write!(f, "}}")
 }
+
+// TODO: Implement serialization and deserialization for CCS data; not used for now.
+fn serrialize_ccs_data(_r: &Recovery) -> crate::Result<Vec<u8>> {todo!()}
+fn deserialize_ccs_data(_r: &mut Recovery, data: &[u8]) {todo!()}
 
 // TODO: write more tests
 #[cfg(test)]

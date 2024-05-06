@@ -50,6 +50,8 @@ pub static RENO: CongestionControlOps = CongestionControlOps {
     rollback,
     has_custom_pacing,
     debug_fmt,
+    serrialize_ccs_data,
+    deserialize_ccs_data,
 };
 
 pub fn on_init(_r: &mut Recovery) {}
@@ -162,6 +164,10 @@ fn has_custom_pacing() -> bool {
 fn debug_fmt(_r: &Recovery, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
     Ok(())
 }
+
+// TODO: Implement serialization and deserialization for CCS data; not used for now.
+fn serrialize_ccs_data(_r: &Recovery) -> crate::Result<Vec<u8>> {todo!()}
+fn deserialize_ccs_data(_r: &mut Recovery, data: &[u8]) {todo!()}
 
 #[cfg(test)]
 mod tests {

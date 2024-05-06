@@ -40,6 +40,8 @@ use crate::frame;
 use crate::minmax;
 use crate::packet;
 use crate::ranges;
+use serde::{Deserialize, Serialize};
+use sha2::{Sha256, Digest};
 
 #[cfg(feature = "qlog")]
 use qlog::events::EventData;
@@ -196,6 +198,13 @@ impl RecoveryConfig {
                 .initial_congestion_window_packets,
         }
     }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct CCSData {
+    congestion_window: usize,
+    ssthresh: usize,
+    ccsdata: Vec<u8>,
 }
 
 impl Recovery {
@@ -1138,7 +1147,76 @@ impl Recovery {
         self.send_quantum
     }
     
-    //TODO! impl créer frame
+    //TODO! complete the following:
+    
+    // The CCS Data from this file and from the Congestion Control algorithm
+    // See: cubic.rs (and reno.rs, bbr.rs, bbr2.rs but not implemented)
+    pub fn get_ccs_data(&self) -> Result<Vec<u8>> {
+        // TODO! writ test for this function!
+
+        let data = CCSData {
+            congestion_window : self.congestion_window,
+            ssthresh : self.ssthresh,
+            ccsdata : (self.cc_ops.serrialize_ccs_data)(self)?,
+        };
+        rmp_serde::to_vec(&data).map_err(|e| crate::Error::CongestionControl)
+    }
+
+    // Creates a CCIndication frame from the CCS data from this file and from the Congestion Control algorithm
+    // See: get_ccs_data()
+    pub fn create_ccindication_frame(&self) -> frame::Frame {
+        // TODO! write test for this function!
+
+        // We get the data
+        let ccs = self.get_ccs_data().unwrap();
+
+        // We need to create a hash from the CCS data
+        // We use the SHA256 algorithm
+        // Example from https://github.com/RustCrypto/hashes
+        // See also: quiche/Cargo.toml: line 83
+        let mut hasher = Sha256::new();
+        hasher.update(&ccs);
+        let hash = hasher.finalize().to_vec();
+
+        frame::Frame::CCIndication{
+            epoch : 2, // number for packet::Epoch::Application; I guess it's the epoch we need to use here
+            ccs,
+            hash,
+        }
+    }
+
+    // TODO! implement:
+    pub fn create_ccresume_frame(&self) -> frame::Frame {
+        todo!("Virgil this is on you as you implemented the file save functions.
+        Literally just create a frame with the data from the file.")
+    }
+
+    // Verifies the received CCS to check for tampering
+    fn verify_recieved_ccs(&self, ccs: &Vec<u8>, hash: &Vec<u8>) -> bool {
+        // TODO! write test for this function!
+
+        // See create_ccindication_frame() for the hash creation
+        let mut hasher = Sha256::new();
+        hasher.update(&ccs);
+        let new_hash = hasher.finalize().to_vec();
+
+        // We compare the hashes; same hash means no tampering
+        new_hash == *hash
+    }
+
+    // Updates the CCS data from the received frame
+    // Use this to process the CCResume frame and update the congestion control algorithm
+    // IMPORTANT! Verify the hash before updating the data to prevent tampering
+    fn update_ccs_data(&mut self, ccs: &Vec<u8>) {
+        // TODO! write test for this function!
+
+        let ccs : CCSData = rmp_serde::from_slice(&ccs).unwrap();
+        // Compiler said to surround the function with parentheses to call it from the reference (&) to cc_ops
+        // Not familiar with this syntax, but it works
+        (self.cc_ops.deserialize_ccs_data)(self, &ccs.ccsdata);
+        self.congestion_window = ccs.congestion_window;
+        self.ssthresh = ccs.ssthresh;
+    }
 }
 
 /// Available congestion control algorithms.
@@ -1208,6 +1286,12 @@ pub struct CongestionControlOps {
 
     pub debug_fmt:
         fn(r: &Recovery, formatter: &mut std::fmt::Formatter) -> std::fmt::Result,
+
+    pub serrialize_ccs_data:
+        fn(r: &Recovery) -> crate::Result<Vec<u8>>,
+
+    pub deserialize_ccs_data:
+        fn(r: &mut Recovery, data: &[u8]),
 }
 
 impl From<CongestionControlAlgorithm> for &'static CongestionControlOps {

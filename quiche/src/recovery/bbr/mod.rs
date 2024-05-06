@@ -45,6 +45,8 @@ pub static BBR: CongestionControlOps = CongestionControlOps {
     rollback,
     has_custom_pacing,
     debug_fmt,
+    serrialize_ccs_data,
+    deserialize_ccs_data,
 };
 
 /// A constant specifying the length of the BBR.BtlBw max filter window for
@@ -358,6 +360,10 @@ fn debug_fmt(r: &Recovery, f: &mut std::fmt::Formatter) -> std::fmt::Result {
          bbr.state, bbr.btlbw, bbr.rtprop, bbr.pacing_rate, bbr.pacing_gain, bbr.cwnd_gain, bbr.target_cwnd, r.send_quantum(), bbr.filled_pipe, bbr.round_count
     )
 }
+
+// TODO: Implement serialization and deserialization for CCS data; not used for now.
+fn serrialize_ccs_data(_r: &Recovery) -> crate::Result<Vec<u8>> {todo!()}
+fn deserialize_ccs_data(_r: &mut Recovery, data: &[u8]) {todo!()}
 
 #[cfg(test)]
 mod tests {
