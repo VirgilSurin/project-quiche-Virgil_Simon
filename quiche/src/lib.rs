@@ -406,6 +406,7 @@ use stream::StreamPriorityKey;
 
 use std::cmp;
 use std::convert::TryInto;
+use std::io::Write;
 use std::time;
 
 use std::sync::Arc;
@@ -419,6 +420,12 @@ use std::collections::VecDeque;
 
 use smallvec::SmallVec;
 
+use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256 GCM for encryption
+use aes_gcm::aead::{Aead, NewAead};
+use generic_array::typenum::U12; // This specifies a length of 12 bytes
+
+use std::fs::File;
+use std::io::Read;
 use serde_json;
 
 /// The current QUIC wire version.
@@ -752,24 +759,30 @@ pub struct Config {
     enable_server_congestion_resume: bool,
 }
 
-fn init_encryption() -> Result<(Aes256Gcm, Nonce), aes_gcm::Error> {
-    let key = Key::from_slice(b"an example very very secret key."); // 32 bytes
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(b"unique nonce"); // 12 bytes; must be unique per message
-    Ok((cipher, nonce))
-}
-
-// Define a function to encrypt data
-fn encrypt_data(data: &[u8], cipher: &Aes256Gcm, nonce: &Nonce) -> Result<Vec<u8>, aes_gcm::aead::Error> {
-    cipher.encrypt(nonce, data)
-}
-
-// Define a function to write encrypted data to a file
-fn write_encrypted_data_to_file(data: &[u8], filename: &str) -> Result<(), IoError> {
-    let mut file = File::create(filename)?;
-    file.write_all(data)?;
-    Ok(())
-}
+// This is the remaining code of our attempt to encrypt the file with the ccs save in it. (we kept the unused import just in case)
+// The error was with the Nonce, we could not get it to work (error with the size specification somehow)
+// fn init_encryption(hash: str) -> (Aes256Gcm, Nonce::<U12>) {
+//     let key = Key::from_slice(hash.as_bytes()); // 32 bytes
+//     let cipher = Aes256Gcm::new(key);
+//     let nonce = Nonce::from_slice(b"unique nonce"); // 12 bytes; must be unique per message
+//     (cipher, nonce)
+// }
+// fn encrypt_data(data: &[u8], cipher: &Aes256Gcm, nonce: &Nonce::<U12>) -> Vec<u8> {
+//     cipher.encrypt(nonce, data)
+// }
+// fn write_encrypted_data_to_file(data: &[u8], filename: &str) {
+//     let mut file = File::create(filename)?;
+//     file.write_all(data)?;
+// }
+// fn read_encrypted_data_from_file(filename: &str) -> Vec<u8> {
+//     let mut file = File::open(filename)?;
+//     let mut data = Vec::new();
+//     file.read_to_end(&mut data)?;
+//     data
+// }
+// fn decrypt_data(encrypted_data: &[u8], cipher: &Aes256Gcm, nonce: &Nonce) -> Vec<u8> {
+//     cipher.decrypt(nonce, encrypted_data)
+// }
 
 // See https://quicwg.org/base-drafts/rfc9000.html#section-15
 fn is_reserved_version(version: u32) -> bool {
@@ -7360,23 +7373,32 @@ impl Connection {
                 if self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
-                // Serialize ccs as JSON before encryption
-                let ccs_json = serde_json::to_vec(&ccs).map_err(|_| Error::InternalError)?;
+                let mut file = match File::create("ccs.b") {
+                    Ok(file) => file,
+                    Err(_) => todo!(),
+                };
+                if let Err(_) = file.write_all(&ccs) {}
 
-                // Initialize encryption
-                let (cipher, nonce) = init_encryption().map_err(|_| Error::InternalError)?;
-
-                // Encrypt ccs data
-                let encrypted_data = encrypt_data(&ccs_json, &cipher, &nonce).map_err(|_| Error::InternalError)?;
-
-                // Write encrypted data to a file
-                write_encrypted_data_to_file(&encrypted_data, "encrypted_ccs_data.bin").map_err(|_| Error::InternalError)?;
+                // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
+                // Unfortunatly, we did not managed to make it work...
+                // let ccs_json = serde_json::to_vec(&ccs).map_err(|_| Error::InternalError)?;
+                // let (cipher, nonce) = init_encryption(hash).map_err(|_| Error::InternalError)?;
+                // let encrypted_data = encrypt_data(&ccs_json, &cipher, &nonce).map_err(|_| Error::InternalError)?;
+                // write_encrypted_data_to_file(&encrypted_data, "encrypted_ccs_data.bin").map_err(|_| Error::InternalError)?;
             },
 
             frame::Frame::CCResume { epoch, ccs, hash } => {
                 if !self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
+
+                // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
+                // Unfortunatly, we did not managed to make it work...
+                // let encrypted_data = read_encrypted_data_from_file("encrypted_ccs_data.bin").map_err(|_| Error::InternalError)?;
+                // let (cipher, nonce) = init_encryption(hash).map_err(|_| Error::InternalError)?;
+                // let decrypted_data = decrypt_data(&encrypted_data, &cipher, &nonce).map_err(|_| Error::InternalError)?;
+                // ccs = serde_json::from_slice(&decrypted_data).map_err(|_| Error::InternalError)?;
+
             },
         }
 
