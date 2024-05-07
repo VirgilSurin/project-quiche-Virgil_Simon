@@ -423,11 +423,11 @@ use smallvec::SmallVec;
 use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256 GCM for encryption
 use aes_gcm::aead::{Aead, NewAead};
 use generic_array::typenum::U12; // This specifies a length of 12 bytes
+use unix_time::Instant;
 
 use std::fs::File;
-use std::io::{Read, Write, Error as IoError};
-use serde::{Serialize, Deserialize};
-use bincode;
+use std::io::{Read, Write};
+use serde_json::json;
 
 /// The current QUIC wire version.
 pub const PROTOCOL_VERSION: u32 = PROTOCOL_VERSION_V1;
@@ -760,12 +760,20 @@ pub struct Config {
     enable_server_congestion_resume: bool,
 }
 
-fn write_cc_indication(file_path: &str, frame: &frame::Frame) -> Result<frame::Frame> {
-    // Serialize the frame into binary format
-    let encoded = bincode::serialize(frame).expect("Failed to serialize frame");
-    // Create and write to the specified file
+fn write_cc_indication(file_path: &str, frame: &frame::Frame) -> Result<()> {
+    let frame_data = if let frame::Frame::CCIndication { epoch, ccs, hash } = frame {
+        json!({
+            "epoch": epoch,
+            "ccs" : ccs,
+            "hash": hash
+        })
+    } else {
+        panic!("Error, not a CCIndication frame");
+    };
+
+    let json_string = serde_json::to_string_pretty(&frame_data).expect("Failed to serialize frame to JSON");
     let mut file = File::create(file_path)?;
-    file.write_all(&encoded)?;
+    file.write_all(json_string.as_bytes())?;
     Ok(())
 }
 // This is the remaining code of our attempt to encrypt the file with the ccs save in it. (we kept the unused import just in case)
@@ -7447,6 +7455,15 @@ impl Connection {
                 if !self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
+
+                let unixtepoch = UnixTimeInstant::now();
+                let epoch = UnixTimeInstant::secs(&unixtepoch);
+                if  - epoch > 3600 {
+                    return Err(Error::ProtocolViolation); // maybe create an error for this would be beter
+                }
+
+                // self.paths.get_mut(recv_path_id)?.recovery.get_ccs_data();
+                // TODO : assert that we only recieve one, not two or more
 
                 // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
                 // Unfortunatly, we did not managed to make it work...
