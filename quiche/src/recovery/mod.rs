@@ -36,6 +36,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use std::collections::VecDeque;
+use std::time::SystemTime;
+use unix_time::Instant as UnixTimeInstant;
 
 use crate::Config;
 use crate::Result;
@@ -1182,8 +1184,15 @@ impl Recovery {
         hasher.update(&ccs);
         let hash = hasher.finalize().to_vec();
 
+
+        // We get the epoch from the current time in seconds since the Unix epoch
+        // See: https://github.com/qdeconinck/unix-time
+        let unixtepoch = UnixTimeInstant::now();
+        let epoch = UnixTimeInstant::secs(&unixtepoch);
+
+
         frame::Frame::CCIndication{
-            epoch : 2, // number for packet::Epoch::Application; I guess it's the epoch we need to use here
+            epoch, // number for packet::Epoch::Application; I guess it's the epoch we need to use here
             ccs,
             hash,
         }
