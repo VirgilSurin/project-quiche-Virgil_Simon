@@ -1235,7 +1235,7 @@ impl Recovery {
     }
 
     // Verifies the received CCS to check for tampering
-    fn verify_recieved_ccs(&self, ccs: &Vec<u8>, hash: &Vec<u8>) -> bool {
+    pub fn verify_recieved_ccs(&self, ccs: &Vec<u8>, hash: &Vec<u8>) -> bool {
         // TODO! write test for this function!
 
         // See create_ccindication_frame() for the hash creation
@@ -1250,7 +1250,7 @@ impl Recovery {
     // Updates the CCS data from the received frame
     // Use this to process the CCResume frame and update the congestion control algorithm
     // IMPORTANT! Verify the hash before updating the data to prevent tampering
-    fn update_ccs_data(&mut self, ccs: &Vec<u8>) {
+    pub fn update_ccs_data(&mut self, ccs: &Vec<u8>) {
         // TODO! write test for this function!
 
         let ccs : CCSData = rmp_serde::from_slice(&ccs).unwrap();
