@@ -26,6 +26,10 @@
 
 use std::cmp;
 
+use std::fs::File;
+use std::io::{Read, Error as IoError};
+use serde::{Serialize, Deserialize};
+use bincode;
 use std::str::FromStr;
 
 use std::time::Duration;
@@ -1185,10 +1189,28 @@ impl Recovery {
         }
     }
 
-    // TODO! implement:
+    fn read_cc_indication_from_file(file_path: &str) -> Result<frame::Frame> {
+        let mut file = File::open(file_path)?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+        let frame: frame::Frame = bincode::deserialize(&data).expect("Failed to deserialize CCIndication data");
+        Ok(frame)
+    }
+
+    // Function to create the `CCResume` frame using data retrieved from the file
     pub fn create_ccresume_frame(&self) -> frame::Frame {
-        todo!("Virgil this is on you as you implemented the file save functions.
-        Literally just create a frame with the data from the file.")
+        let cc_indication = match self.read_cc_indication_from_file("ccs.b") {
+            Ok(frame) => frame,
+            Err(e) => {
+                panic!("Error reading `ccs` data from file: {:?}", e);
+            }
+        };
+
+        frame::Frame::CCResume {
+            epoch: cc_indication.epoch,
+            ccs: cc_indication.ccs,
+            hash: cc_indication.hash,
+        }
     }
 
     // Verifies the received CCS to check for tampering

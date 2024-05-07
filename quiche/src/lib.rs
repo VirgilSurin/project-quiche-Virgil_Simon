@@ -406,7 +406,6 @@ use stream::StreamPriorityKey;
 
 use std::cmp;
 use std::convert::TryInto;
-use std::io::Write;
 use std::time;
 
 use std::sync::Arc;
@@ -425,8 +424,9 @@ use aes_gcm::aead::{Aead, NewAead};
 use generic_array::typenum::U12; // This specifies a length of 12 bytes
 
 use std::fs::File;
-use std::io::Read;
-use serde_json;
+use std::io::{Read, Write, Error as IoError};
+use serde::{Serialize, Deserialize};
+use bincode;
 
 /// The current QUIC wire version.
 pub const PROTOCOL_VERSION: u32 = PROTOCOL_VERSION_V1;
@@ -759,6 +759,14 @@ pub struct Config {
     enable_server_congestion_resume: bool,
 }
 
+fn write_cc_indication(file_path: &str, frame: &frame::Frame::CCIndication) -> Result<(), IoError> {
+    // Serialize the frame into binary format
+    let encoded = bincode::serialize(frame).expect("Failed to serialize frame");
+    // Create and write to the specified file
+    let mut file = File::create(file_path)?;
+    file.write_all(&encoded)?;
+    Ok(())
+}
 // This is the remaining code of our attempt to encrypt the file with the ccs save in it. (we kept the unused import just in case)
 // The error was with the Nonce, we could not get it to work (error with the size specification somehow)
 // fn init_encryption(hash: str) -> (Aes256Gcm, Nonce::<U12>) {
@@ -7373,11 +7381,16 @@ impl Connection {
                 if self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
-                let mut file = match File::create("ccs.b") {
-                    Ok(file) => file,
-                    Err(_) => todo!(),
+                let cc_frame = frame::Frame::CCIndication {
+                    epoch,
+                    ccs,
+                    hash,
                 };
-                if let Err(_) = file.write_all(&ccs) {}
+
+                // Write the structure to a binary file using the function defined above
+                if let Err(e) = write_cc_indication("ccs.b", &cc_frame) {
+                    println!("Failed to write frame data to file: {:?}", e);
+                }
 
                 // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
                 // Unfortunatly, we did not managed to make it work...
