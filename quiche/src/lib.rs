@@ -422,6 +422,7 @@ use smallvec::SmallVec;
 use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256 GCM for encryption
 use aes_gcm::aead::{Aead, NewAead};
 use generic_array::typenum::U12; // This specifies a length of 12 bytes
+use unix_time::Instant;
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -7415,7 +7416,9 @@ impl Connection {
                     return Err(Error::ProtocolViolation);
                 }
 
-                if now - epoch > 3600 {
+                let unixtepoch = UnixTimeInstant::now();
+                let epoch = UnixTimeInstant::secs(&unixtepoch);
+                if  - epoch > 3600 {
                     return Err(Error::ProtocolViolation); // maybe create an error for this would be beter
                 }
 
