@@ -4255,7 +4255,9 @@ impl Connection {
         if (!self.is_server) && self.local_transport_params.enable_server_congestion_resume && self.peer_transport_params.enable_server_congestion_resume && pkt_type == packet::Type::Short && (!self.cc_resume_sent) && path.active()  {
             let frame = path.recovery.create_ccresume_frame();
 
+            // I don't know if I need to change any values here.
             push_frame_to_pkt!(b, frames, frame, left);
+            // Set the flag so we only send one CC_Resume frame.
             self.cc_resume_sent = true;
         }
         
