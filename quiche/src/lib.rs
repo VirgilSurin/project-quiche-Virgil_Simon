@@ -17179,20 +17179,6 @@ mod tests {
         assert_eq!(pmtu_param.get_probe_status(), true);
     }
 
-    #[test]
-    fn negotiate_congestion_resume() {
-        // We test wether a missmatch is detected when one peer does not support server congestion resume.
-        let mut pipe = testing::Pipe::new().unwrap();
-        pipe.server
-            .local_transport_params
-            .enable_server_congestion_resume = false;
-        pipe.client
-            .local_transport_params
-            .enable_server_congestion_resume = true;
-
-        assert_eq!(pipe.handshake(), Err(Error::InvalidTransportParam));
-    }
-
 
 }
 

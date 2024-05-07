@@ -1156,15 +1156,15 @@ impl Recovery {
     
     // The CCS Data from this file and from the Congestion Control algorithm
     // See: cubic.rs (and reno.rs, bbr.rs, bbr2.rs but not implemented)
-    pub fn get_ccs_data(&self) -> Result<Vec<u8>> {
+    pub fn get_ccs_data(&self) -> CCSData {
         // TODO! writ test for this function!
 
-        let data = CCSData {
+        CCSData {
             congestion_window : self.congestion_window,
             ssthresh : self.ssthresh,
-            ccsdata : (self.cc_ops.serrialize_ccs_data)(self)?,
-        };
-        rmp_serde::to_vec(&data).map_err(|e| crate::Error::CongestionControl)
+            ccsdata : (self.cc_ops.serrialize_ccs_data)(self).unwrap(),
+        }
+        
     }
 
     // Creates a CCIndication frame from the CCS data from this file and from the Congestion Control algorithm
@@ -1173,7 +1173,8 @@ impl Recovery {
         // TODO! write test for this function!
 
         // We get the data
-        let ccs = self.get_ccs_data().unwrap();
+        let raw_ccs = self.get_ccs_data();
+        let ccs = rmp_serde::to_vec(&raw_ccs).unwrap();
 
         // We need to create a hash from the CCS data
         // We use the SHA256 algorithm
@@ -1191,7 +1192,7 @@ impl Recovery {
 
 
         frame::Frame::CCIndication{
-            epoch, // number for packet::Epoch::Application; I guess it's the epoch we need to use here
+            epoch, // Epoch in seconds since the Unix epoch for safety
             ccs,
             hash,
         }
@@ -2582,9 +2583,39 @@ mod tests {
 
     #[test]
     fn test_get_ccs_data() {
-        let data = get_ccs_data();
-        // let deserialized_data =
+        let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
+        cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
+
+        let r = Recovery::new(&cfg);
+
+        let initial_ccs_data = r.get_ccs_data();
+
+        let ccs_data = rmp_serde::to_vec(&initial_ccs_data).unwrap();
+        let deserialized_data : CCSData = rmp_serde::from_slice(&ccs_data).unwrap();
+
+        assert_eq!(initial_ccs_data, deserialized_data);
     }
+
+    #[test]
+    fn create_ccindication_frame() {
+        let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
+        cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
+
+        let r = Recovery::new(&cfg);
+
+        let frame = r.create_ccindication_frame();
+
+        let result = match &frame {
+            // Ok we have a CCIndication frame. Pass the test.
+            frame::Frame::CCIndication { epoch: _, ccs: _, hash: _ } => Ok(&frame),
+            // Not a CCIndication frame. Fail the test.
+            _ => Err(crate::Error::InvalidFrame),
+        };
+
+        assert_eq!(result, Ok(&frame));
+    }
+
+    
 }
 
 mod bbr;
