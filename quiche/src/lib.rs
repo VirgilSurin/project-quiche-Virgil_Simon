@@ -772,8 +772,8 @@ fn write_cc_indication(file_path: &str, frame: &frame::Frame) -> Result<()> {
     };
 
     let json_string = serde_json::to_string_pretty(&frame_data).expect("Failed to serialize frame to JSON");
-    let mut file = File::create(file_path)?;
-    file.write_all(json_string.as_bytes())?;
+    let mut file = File::create(file_path).unwrap();
+    file.write_all(json_string.as_bytes()).unwrap();
     Ok(())
 }
 // This is the remaining code of our attempt to encrypt the file with the ccs save in it. (we kept the unused import just in case)
@@ -7458,7 +7458,7 @@ impl Connection {
 
                 let unixtepoch = UnixTimeInstant::now();
                 let epoch = UnixTimeInstant::secs(&unixtepoch);
-                if  - epoch > 3600 {
+                if  unixtepoch.secs() - epoch > 3600 {
                     return Err(Error::ProtocolViolation); // maybe create an error for this would be beter
                 }
 

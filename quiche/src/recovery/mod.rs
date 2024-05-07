@@ -1197,45 +1197,41 @@ impl Recovery {
         }
     }
 
-    fn read_cc_indication_from_file(&self, file_path: &str) -> Result<frame::Frame> {
+    fn read_cc_indication_from_file(&self, file_path: &str) -> frame::Frame {
         // Open and read the JSON file
-        let mut file: std::fs::File = File::open(file_path)?;
+        let mut file = File::open(file_path).unwrap();
         let mut json_data = String::new();
-        file.read_to_string(&mut json_data);
+        file.read_to_string(&mut json_data).unwrap();
 
-
-        // Parse the JSON data back into a `Value` object
-        let frame_data = serde_json::from_str(&json_data).expect("Failed to parse JSON data");
-
-        // Extract fields from the JSON object and build the `CCIndication` frame
+        let frame_data: serde_json::Value = serde_json::from_str(&json_data).unwrap();
         if let (Some(epoch), Some(ccs), Some(hash)) = (
             frame_data.get("epoch").and_then(|v| v.as_u64()),
             frame_data.get("ccs").and_then(|v| serde_json::from_value(v.clone()).ok()),
             frame_data.get("hash").and_then(|v| serde_json::from_value(v.clone()).ok())
         ) {
-            Ok(frame::Frame::CCIndication {
+            frame::Frame::CCIndication {
                 epoch,
                 ccs,
                 hash,
-            })
+            }
         } else {
             panic!("Error reading the JSON data");
         }
     }
 
     pub fn create_ccresume_frame(&self) -> frame::Frame {
-        // Read the frame from the JSON file and cast it to a `CCIndication` frame
-        let cc_indication = match self.read_cc_indication_from_file("ccs.json").unwrap() {
+        // Read the `CCIndication` frame from the JSON file
+        let cc_indication = match self.read_cc_indication_from_file("css.b") {
             frame::Frame::CCIndication { epoch, ccs, hash } => (epoch, ccs, hash),
             _ => panic!("Error reading the JSON data"),
         };
+
         // Create and return a `CCResume` frame using the extracted data
         frame::Frame::CCResume {
             epoch: cc_indication.0,
             ccs: cc_indication.1,
             hash: cc_indication.2,
         }
-        
     }
 
     // Verifies the received CCS to check for tampering
