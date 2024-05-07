@@ -1468,6 +1468,9 @@ pub struct Connection {
     /// CC resume sent
     cc_resume_sent: bool,
 
+    /// CC resume processed
+    cc_resume_processed: bool,
+
     /// List of raw packets that were received before they could be decrypted.
     undecryptable_pkts: VecDeque<(Vec<u8>, RecvInfo)>,
 
@@ -1940,6 +1943,8 @@ impl Connection {
             cc_timer_passed: false,
 
             cc_resume_sent: false,
+
+            cc_resume_processed: false,
 
             undecryptable_pkts: VecDeque::new(),
 
@@ -7456,14 +7461,17 @@ impl Connection {
                     return Err(Error::ProtocolViolation);
                 }
 
-                let unixtepoch = UnixTimeInstant::now();
-                let epoch = UnixTimeInstant::secs(&unixtepoch);
-                if  unixtepoch.secs() - epoch > 3600 {
-                    return Err(Error::ProtocolViolation); // maybe create an error for this would be beter
+                if !self.cc_resume_processed { // NOTE: where is the best place to check this ? before or after previous if
+                    let unixtepoch = UnixTimeInstant::now();
+                    let epoch = UnixTimeInstant::secs(&unixtepoch);
+                    if  unixtepoch.secs() - epoch > 3600 {
+                        return Err(Error::ProtocolViolation); // maybe create an error for this would be beter
+                    }
+                    if self.paths.get_mut(recv_path_id).unwrap().recovery.verify_recieved_ccs(&ccs, &hash) {
+                        self.paths.get_mut(recv_path_id).unwrap().recovery.update_ccs_data(&ccs);
+                        self.cc_resume_processed = true;
+                    }
                 }
-
-                // self.paths.get_mut(recv_path_id)?.recovery.get_ccs_data();
-                // TODO : assert that we only recieve one, not two or more
 
                 // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
                 // Unfortunatly, we did not managed to make it work...
