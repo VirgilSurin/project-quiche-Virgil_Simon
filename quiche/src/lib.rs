@@ -424,7 +424,6 @@ use smallvec::SmallVec;
 use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256 GCM for encryption
 use aes_gcm::aead::{Aead, NewAead};
 use generic_array::typenum::U12; // This specifies a length of 12 bytes
-use unix_time::Instant as UnixTimeInstant;
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -9251,16 +9250,6 @@ mod tests {
     }
 
     #[test]
-    fn negotiate_congestion_resume() {
-
-        let mut pipe = testing::Pipe::new().unwrap();
-        pipe.client.local_transport_params.enable_server_congestion_resume = true;
-        pipe.server.local_transport_params.enable_server_congestion_resume = false;
-        assert_eq!(pipe.handshake(), Ok(()));
-
-    }
-
-    #[test]
     fn handshake_done() {
         let mut pipe = testing::Pipe::new().unwrap();
 
@@ -17181,6 +17170,22 @@ mod tests {
         // Continue searching for PMTU
         assert_eq!(pmtu_param.get_probe_status(), true);
     }
+
+    #[test]
+    fn negotiate_congestion_resume() {
+        // We test wether a missmatch is detected when one peer does not support server congestion resume.
+        let mut pipe = testing::Pipe::new().unwrap();
+        pipe.server
+            .local_transport_params
+            .enable_server_congestion_resume = false;
+        pipe.client
+            .local_transport_params
+            .enable_server_congestion_resume = true;
+
+        assert_eq!(pipe.handshake(), Err(Error::InvalidTransportParam));
+    }
+
+
 }
 
 pub use crate::packet::ConnectionId;

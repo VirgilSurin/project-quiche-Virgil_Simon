@@ -1197,7 +1197,7 @@ impl Recovery {
         }
     }
 
-    fn read_cc_indication_from_file(file_path: &str) -> Result<frame::Frame> {
+    fn read_cc_indication_from_file(&self, file_path: &str) -> Result<frame::Frame> {
         // Open and read the JSON file
         let mut file: std::fs::File = File::open(file_path)?;
         let mut json_data = String::new();
@@ -1224,26 +1224,18 @@ impl Recovery {
     }
 
     pub fn create_ccresume_frame(&self) -> frame::Frame {
-        // Read the `CCIndication` frame from the JSON file
-        let cc_indication = match self.read_cc_indication_from_file("ccs_data.json") {
-            Ok(frame) => {
-                if let frame::Frame::CCIndication { epoch, ccs, hash } = frame {
-                    (epoch, ccs, hash)
-                } else {
-                    panic!("Expected a CCIndication frame");
-                }
-            }
-            Err(e) => {
-                panic!("Error reading `ccs` data from file: {:?}", e);
-            }
+        // Read the frame from the JSON file and cast it to a `CCIndication` frame
+        let cc_indication = match self.read_cc_indication_from_file("ccs.json").unwrap() {
+            frame::Frame::CCIndication { epoch, ccs, hash } => (epoch, ccs, hash),
+            _ => panic!("Error reading the JSON data"),
         };
-
         // Create and return a `CCResume` frame using the extracted data
         frame::Frame::CCResume {
             epoch: cc_indication.0,
             ccs: cc_indication.1,
             hash: cc_indication.2,
         }
+        
     }
 
     // Verifies the received CCS to check for tampering
