@@ -416,6 +416,7 @@ use std::str::FromStr;
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::time::Duration;
 
 use smallvec::SmallVec;
 
@@ -759,7 +760,7 @@ pub struct Config {
     enable_server_congestion_resume: bool,
 }
 
-fn write_cc_indication(file_path: &str, frame: &frame::Frame::CCIndication) -> Result<(), IoError> {
+fn write_cc_indication(file_path: &str, frame: &frame::Frame) -> Result<frame::Frame> {
     // Serialize the frame into binary format
     let encoded = bincode::serialize(frame).expect("Failed to serialize frame");
     // Create and write to the specified file
@@ -1450,6 +1451,15 @@ pub struct Connection {
     /// Draining timeout expiration time.
     draining_timer: Option<time::Instant>,
 
+    /// CC frames timer
+    cc_timer: Option<time::Instant>,
+
+    /// CC timer bool
+    cc_timer_passed: bool,
+
+    /// CC resume sent
+    cc_resume_sent: bool,
+
     /// List of raw packets that were received before they could be decrypted.
     undecryptable_pkts: VecDeque<(Vec<u8>, RecvInfo)>,
 
@@ -1916,6 +1926,12 @@ impl Connection {
             idle_timer: None,
 
             draining_timer: None,
+
+            cc_timer: None,
+
+            cc_timer_passed: false,
+
+            cc_resume_sent: false,
 
             undecryptable_pkts: VecDeque::new(),
 
@@ -4214,10 +4230,26 @@ impl Connection {
             do_dgram = true;
         }
 
-        //TODO! Send CC_Indication frame (insp. datagram pour le if)
-        //push_frame_to_pkt!(b, frames, todo créer frame, left)
-
         // Create CC_Indication frame if is server.
+        if self.is_server && self.local_transport_params.enable_server_congestion_resume && self.peer_transport_params.enable_server_congestion_resume && pkt_type == packet::Type::Short && self.cc_timer_passed && path.active()  {
+            let frame = path.recovery.create_ccindication_frame();
+
+            // I don't know if I need to change any values here.
+            push_frame_to_pkt!(b, frames, frame, left);
+            // Reset the timer so a timeout can happen again.
+            self.cc_timer_passed = false;
+
+            // A timer so we don't send too many CC_Indication frames.
+            self.cc_timer = Some(now + Duration::from_secs(60));
+        }
+
+        // Create CC_Resume frame if is client.
+        if (!self.is_server) && self.local_transport_params.enable_server_congestion_resume && self.peer_transport_params.enable_server_congestion_resume && pkt_type == packet::Type::Short && (!self.cc_resume_sent) && path.active()  {
+            let frame = path.recovery.create_ccresume_frame();
+
+            push_frame_to_pkt!(b, frames, frame, left);
+            self.cc_resume_sent = true;
+        }
         
 
         // Create DATAGRAM frame.
@@ -5858,6 +5890,12 @@ impl Connection {
                 let _ = self.pkt_num_spaces[packet::Epoch::Application]
                     .key_update
                     .take();
+            }
+        }
+
+        if let Some(cc_timer ) = self.cc_timer {
+            if cc_timer <= now {
+                self.cc_timer_passed = true;
             }
         }
 
