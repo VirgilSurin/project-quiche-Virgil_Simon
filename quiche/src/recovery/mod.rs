@@ -1199,26 +1199,51 @@ impl Recovery {
     }
 
     fn read_cc_indication_from_file(file_path: &str) -> Result<frame::Frame> {
-        let mut file = File::open(file_path)?;
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
-        let frame: frame::Frame = bincode::deserialize(&data).expect("Failed to deserialize CCIndication data");
-        Ok(frame)
+        // Open and read the JSON file
+        let mut file: std::fs::File = File::open(file_path)?;
+        let mut json_data = String::new();
+        file.read_to_string(&mut json_data);
+
+
+        // Parse the JSON data back into a `Value` object
+        let frame_data = serde_json::from_str(&json_data).expect("Failed to parse JSON data");
+
+        // Extract fields from the JSON object and build the `CCIndication` frame
+        if let (Some(epoch), Some(ccs), Some(hash)) = (
+            frame_data.get("epoch").and_then(|v| v.as_u64()),
+            frame_data.get("ccs").and_then(|v| serde_json::from_value(v.clone()).ok()),
+            frame_data.get("hash").and_then(|v| serde_json::from_value(v.clone()).ok())
+        ) {
+            Ok(frame::Frame::CCIndication {
+                epoch,
+                ccs,
+                hash,
+            })
+        } else {
+            panic!("Error reading the JSON data");
+        }
     }
 
-    // Function to create the `CCResume` frame using data retrieved from the file
     pub fn create_ccresume_frame(&self) -> frame::Frame {
-        let cc_indication = match self.read_cc_indication_from_file("ccs.b") {
-            Ok(frame) => frame,
+        // Read the `CCIndication` frame from the JSON file
+        let cc_indication = match self.read_cc_indication_from_file("ccs_data.json") {
+            Ok(frame) => {
+                if let frame::Frame::CCIndication { epoch, ccs, hash } = frame {
+                    (epoch, ccs, hash)
+                } else {
+                    panic!("Expected a CCIndication frame");
+                }
+            }
             Err(e) => {
                 panic!("Error reading `ccs` data from file: {:?}", e);
             }
         };
 
+        // Create and return a `CCResume` frame using the extracted data
         frame::Frame::CCResume {
-            epoch: cc_indication.epoch,
-            ccs: cc_indication.ccs,
-            hash: cc_indication.hash,
+            epoch: cc_indication.0,
+            ccs: cc_indication.1,
+            hash: cc_indication.2,
         }
     }
 

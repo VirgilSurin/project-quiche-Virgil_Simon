@@ -423,7 +423,7 @@ use smallvec::SmallVec;
 use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256 GCM for encryption
 use aes_gcm::aead::{Aead, NewAead};
 use generic_array::typenum::U12; // This specifies a length of 12 bytes
-use unix_time::Instant;
+use unix_time::Instant as UnixTimeInstant;
 
 use std::fs::File;
 use std::io::{Read, Write};
