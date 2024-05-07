@@ -2579,6 +2579,12 @@ mod tests {
 
         assert_eq!(r.sent[packet::Epoch::Application].len(), 0);
     }
+
+    #[test]
+    fn test_get_ccs_data() {
+        let data = get_ccs_data();
+        // let deserialized_data =
+    }
 }
 
 mod bbr;
