@@ -4166,6 +4166,9 @@ impl Connection {
         //TODO! Send CC_Indication frame (insp. datagram pour le if)
         //push_frame_to_pkt!(b, frames, todo créer frame, left)
 
+        // Create CC_Indication frame if is server.
+        
+
         // Create DATAGRAM frame.
         if (pkt_type == packet::Type::Short || pkt_type == packet::Type::ZeroRTT) &&
             left > frame::MAX_DGRAM_OVERHEAD &&
