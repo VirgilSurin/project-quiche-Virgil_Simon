@@ -46,7 +46,6 @@ use crate::frame;
 use crate::minmax;
 use crate::packet;
 use crate::ranges;
-use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 
 #[cfg(feature = "qlog")]

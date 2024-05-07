@@ -417,6 +417,7 @@ use std::str::FromStr;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::time::Duration;
+use unix_time::Instant as UnixTimeInstant;
 
 use smallvec::SmallVec;
 
