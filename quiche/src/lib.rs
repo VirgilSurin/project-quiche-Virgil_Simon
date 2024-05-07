@@ -419,6 +419,15 @@ use std::collections::VecDeque;
 
 use smallvec::SmallVec;
 
+use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256 GCM for encryption
+use aes_gcm::aead::{Aead, NewAead};
+use generic_array::typenum::U12; // This specifies a length of 12 bytes
+
+use std::fs::File;
+use std::io::{Read, Write, Error as IoError};
+use serde::{Serialize, Deserialize};
+use bincode;
+
 /// The current QUIC wire version.
 pub const PROTOCOL_VERSION: u32 = PROTOCOL_VERSION_V1;
 
@@ -575,6 +584,9 @@ pub enum Error {
 
     /// The peer sent more data in CRYPTO frames than we can buffer.
     CryptoBufferExceeded,
+
+    /// Protocal violation, the frame is illegal
+    ProtocolViolation,
 }
 
 impl Error {
@@ -617,6 +629,7 @@ impl Error {
             Error::OutOfIdentifiers => -18,
             Error::KeyUpdate => -19,
             Error::CryptoBufferExceeded => -20,
+            Error::ProtocolViolation => -21,
         }
     }
 }
@@ -745,6 +758,39 @@ pub struct Config {
 
     enable_server_congestion_resume: bool,
 }
+
+fn write_cc_indication(file_path: &str, frame: &frame::Frame::CCIndication) -> Result<(), IoError> {
+    // Serialize the frame into binary format
+    let encoded = bincode::serialize(frame).expect("Failed to serialize frame");
+    // Create and write to the specified file
+    let mut file = File::create(file_path)?;
+    file.write_all(&encoded)?;
+    Ok(())
+}
+// This is the remaining code of our attempt to encrypt the file with the ccs save in it. (we kept the unused import just in case)
+// The error was with the Nonce, we could not get it to work (error with the size specification somehow)
+// fn init_encryption(hash: str) -> (Aes256Gcm, Nonce::<U12>) {
+//     let key = Key::from_slice(hash.as_bytes()); // 32 bytes
+//     let cipher = Aes256Gcm::new(key);
+//     let nonce = Nonce::from_slice(b"unique nonce"); // 12 bytes; must be unique per message
+//     (cipher, nonce)
+// }
+// fn encrypt_data(data: &[u8], cipher: &Aes256Gcm, nonce: &Nonce::<U12>) -> Vec<u8> {
+//     cipher.encrypt(nonce, data)
+// }
+// fn write_encrypted_data_to_file(data: &[u8], filename: &str) {
+//     let mut file = File::create(filename)?;
+//     file.write_all(data)?;
+// }
+// fn read_encrypted_data_from_file(filename: &str) -> Vec<u8> {
+//     let mut file = File::open(filename)?;
+//     let mut data = Vec::new();
+//     file.read_to_end(&mut data)?;
+//     data
+// }
+// fn decrypt_data(encrypted_data: &[u8], cipher: &Aes256Gcm, nonce: &Nonce) -> Vec<u8> {
+//     cipher.decrypt(nonce, encrypted_data)
+// }
 
 // See https://quicwg.org/base-drafts/rfc9000.html#section-15
 fn is_reserved_version(version: u32) -> bool {
@@ -1491,6 +1537,9 @@ pub struct Connection {
 
     /// The number of streams stopped by remote.
     stopped_stream_remote_count: u64,
+
+    /// True if server_congestion_resume is active for this connection
+    enable_server_congestion_resume: bool,
 }
 
 /// Creates a new server-side connection.
@@ -1927,6 +1976,8 @@ impl Connection {
             stopped_stream_local_count: 0,
             reset_stream_remote_count: 0,
             stopped_stream_remote_count: 0,
+
+            enable_server_congestion_resume: false,
         };
 
         if let Some(odcid) = odcid {
@@ -6629,11 +6680,17 @@ impl Connection {
             );
         }
 
+
         // Record the max_active_conn_id parameter advertised by the peer.
         self.ids
             .set_source_conn_id_limit(peer_params.active_conn_id_limit);
 
         self.peer_transport_params = peer_params;
+
+        self.enable_server_congestion_resume = self.peer_transport_params.enable_server_congestion_resume && self.local_transport_params.enable_server_congestion_resume;
+        println!("RES: {:?}", self.enable_server_congestion_resume);
+        println!("Peer: {:?}", self.peer_transport_params.enable_server_congestion_resume);
+        println!("Local: {:?}", self.local_transport_params.enable_server_congestion_resume);
 
         Ok(())
     }
@@ -7323,9 +7380,42 @@ impl Connection {
             frame::Frame::DatagramHeader { .. } => unreachable!(),
             
             //recevoir une frame
-            frame::Frame::CCIndication { epoch, ccs, hash } => {todo!()},
+            frame::Frame::CCIndication { epoch, ccs, hash } => {
+                if self.is_server() {
+                    return Err(Error::ProtocolViolation);
+                }
+                let cc_frame = frame::Frame::CCIndication {
+                    epoch,
+                    ccs,
+                    hash,
+                };
 
-            frame::Frame::CCResume { epoch, ccs, hash } => {todo!()},
+                // Write the structure to a binary file using the function defined above
+                if let Err(e) = write_cc_indication("ccs.b", &cc_frame) {
+                    println!("Failed to write frame data to file: {:?}", e);
+                }
+
+                // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
+                // Unfortunatly, we did not managed to make it work...
+                // let ccs_json = serde_json::to_vec(&ccs).map_err(|_| Error::InternalError)?;
+                // let (cipher, nonce) = init_encryption(hash).map_err(|_| Error::InternalError)?;
+                // let encrypted_data = encrypt_data(&ccs_json, &cipher, &nonce).map_err(|_| Error::InternalError)?;
+                // write_encrypted_data_to_file(&encrypted_data, "encrypted_ccs_data.bin").map_err(|_| Error::InternalError)?;
+            },
+
+            frame::Frame::CCResume { epoch, ccs, hash } => {
+                if !self.is_server() {
+                    return Err(Error::ProtocolViolation);
+                }
+
+                // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
+                // Unfortunatly, we did not managed to make it work...
+                // let encrypted_data = read_encrypted_data_from_file("encrypted_ccs_data.bin").map_err(|_| Error::InternalError)?;
+                // let (cipher, nonce) = init_encryption(hash).map_err(|_| Error::InternalError)?;
+                // let decrypted_data = decrypt_data(&encrypted_data, &cipher, &nonce).map_err(|_| Error::InternalError)?;
+                // ccs = serde_json::from_slice(&decrypted_data).map_err(|_| Error::InternalError)?;
+
+            },
         }
 
         Ok(())
@@ -7877,6 +7967,7 @@ pub struct TransportParams {
     /// DATAGRAM frame extension parameter, if any.
     pub max_datagram_frame_size: Option<u64>,
     // pub preferred_address: ...,
+    /// flag
     pub enable_server_congestion_resume: bool,
 }
 
