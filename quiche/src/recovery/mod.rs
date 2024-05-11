@@ -1620,6 +1620,7 @@ impl QlogMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::de;
     use smallvec::smallvec;
 
     #[test]
@@ -2613,6 +2614,74 @@ mod tests {
         };
 
         assert_eq!(result, Ok(&frame));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_read_cc_ind_from_file(){
+        let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
+        cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
+
+        let r = Recovery::new(&cfg);
+
+        let frame = r.read_cc_indication_from_file("test.b");
+        let result = match &frame {
+            frame::Frame::CCIndication { epoch, ccs, hash } => Ok(&frame),
+            _ => Err(crate::Error::InvalidFrame),
+        };
+        
+        assert_eq!(result, Ok(&frame));
+    }
+
+    #[test]
+    #[ignore] // Because of the data file for now.
+    fn create_ccresume_frame() {
+        let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
+        cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
+
+        let r = Recovery::new(&cfg);
+
+        let frame = r.create_ccresume_frame();
+
+        let result = match &frame {
+            // Ok we have a CCResume frame. Pass the test.
+            frame::Frame::CCResume { epoch: _, ccs: _, hash: _ } => Ok(&frame),
+            // Not a CCResume frame. Fail the test.
+            _ => Err(crate::Error::InvalidFrame),
+        };
+
+        assert_eq!(result, Ok(&frame));
+    }
+
+    #[test]
+    fn test_ccs_verification() {
+        let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
+        cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
+
+        let r = Recovery::new(&cfg);
+
+        // We create a CCIndication frame.
+        // The test should be for a CCResume frame. However, testing a CCResume frame properly requires a test data file (see test_read_cc_ind_from_file()).
+        // As such a file could be erased, causing the need to ignore the test, we will test the verification with a CCIndication frame.
+        // It should change nothing, as the content is supposed to be the same.
+        let frame = match r.create_ccindication_frame() {
+            frame::Frame::CCIndication { epoch, ccs, hash } => {(epoch, ccs, hash)},
+            _ => panic!("Invalid frame type"),
+        };
+
+        let mut deseriazed_ccs_data : CCSData = rmp_serde::from_slice(&frame.1).unwrap();
+        deseriazed_ccs_data.ssthresh = 1;
+
+        let false_css_data = rmp_serde::to_vec(&deseriazed_ccs_data).unwrap();
+
+        let result = r.verify_recieved_ccs(&false_css_data, &frame.2);
+
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_update_ccs() {
+        todo!("Test update_ccs()");
     }
 
     
