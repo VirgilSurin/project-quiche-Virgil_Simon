@@ -871,7 +871,7 @@ impl Frame {
             },
 
             Frame::CCIndication { epoch, ccs, hash } => {
-                1 + // frame type
+                8 + // frame type
                 octets::varint_len(*epoch) + // epoch
                 octets::varint_len(ccs.len() as u64) + // ccs length
                 ccs.len() + // ccs
@@ -881,7 +881,7 @@ impl Frame {
             },
 
             Frame::CCResume { epoch, ccs, hash } => {
-                1 + // frame type
+                8 + // frame type
                 octets::varint_len(*epoch) + // epoch
                 octets::varint_len(ccs.len() as u64) + // ccs length
                 ccs.len() + // ccs
@@ -2227,6 +2227,7 @@ mod tests {
         };
  
         assert_eq!(wire_len, 34);
+        assert_eq!(wire_len, frame.wire_len());
 
         let mut b = octets::Octets::with_slice(&d);
         // CCIndication is only allowed in 1-RTT (short) packets, as per the specification p. 3.
@@ -2276,6 +2277,7 @@ mod tests {
         };
 
         assert_eq!(wire_len, 34);
+        assert_eq!(wire_len, frame.wire_len());
 
         let mut b = octets::Octets::with_slice(&d);
         // CCResume is only allowed in 1-RTT (short) packets, as per the specification p. 3.

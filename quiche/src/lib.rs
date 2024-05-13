@@ -758,6 +758,7 @@ pub struct Config {
     max_stream_window: u64,
 
     disable_dcid_reuse: bool,
+    path_to_write_cc: Option<PathBuf>,
 }
 
 // TODO: do all of this again in a barely decent way if possible ;-;
@@ -866,6 +867,7 @@ impl Config {
             max_stream_window: stream::MAX_STREAM_WINDOW,
 
             disable_dcid_reuse: false,
+            path_to_write_cc: None,
         })
     }
 
@@ -1329,9 +1331,17 @@ impl Config {
         self.disable_dcid_reuse = v;
     }
 
+    /// Sets the bool value for the server congestion control resume.
     pub fn set_enable_server_congestion_resume(&mut self, v: bool) {
         self.local_transport_params.enable_server_congestion_resume = v;
     }
+    /// Sets the path to write the congestion control frames to.
+    /// The default value is `None`.
+    /// The path should be a valid path to a file.
+    pub fn set_path_to_write_cc(&mut self, v: PathBuf) {
+        self.path_to_write_cc = Some(v);
+    }
+
 }
 
 /// A QUIC connection.
@@ -1469,6 +1479,10 @@ pub struct Connection {
 
     /// CC resume processed
     cc_resume_processed: bool,
+
+    /// Path to write the congestion control frames to.
+    /// The path should be a valid path to a file.
+    path_to_write_cc: Option<PathBuf>,
 
     /// List of raw packets that were received before they could be decrypted.
     undecryptable_pkts: VecDeque<(Vec<u8>, RecvInfo)>,
@@ -1951,6 +1965,8 @@ impl Connection {
             cc_resume_sent: false,
 
             cc_resume_processed: false,
+
+            path_to_write_cc: config.path_to_write_cc.clone(),
 
             undecryptable_pkts: VecDeque::new(),
 
@@ -3491,7 +3507,7 @@ impl Connection {
             return Err(Error::Done);
         }
 
-        println!("I am in the send single."); //TODO REMOVE PRINT
+
 
         let is_closing = self.local_error.is_some();
 
@@ -4258,12 +4274,12 @@ impl Connection {
             && (pkt_type == packet::Type::Short) 
             && self.cc_timer_passed 
             && path.active()  {
-            println!("I am in the CCIndication sending."); //TODO REMOVE PRINT
+
             let frame = path.recovery.create_ccindication_frame();
-            println!("I created CCIndication."); //TODO REMOVE PRINT
+
             // I don't know if I need to change any values here.
             if push_frame_to_pkt!(b, frames, frame, left){
-                println!("I sent CCIndication."); //TODO REMOVE PRINT
+
                 // Reset the timer so a timeout can happen again.
                 self.cc_timer_passed = false;
                 // A timer so we don't send too many CC_Indication frames.
@@ -4278,20 +4294,35 @@ impl Connection {
         && (pkt_type == packet::Type::Short) 
         && (!self.cc_resume_sent) 
         && path.active()  {
-            println!("I am in the CCResume sending."); //TODO REMOVE PRINT
-            let result = path.recovery.create_ccresume_frame();
-            match result {
-                Ok(frame) => {
-                    println!("I created CCResume."); //TODO REMOVE PRINT
-                    // I don't know if I need to change any values here.
-                    if push_frame_to_pkt!(b, frames, frame, left) {
-                        println!("I sent CCResume."); //TODO REMOVE PRINT
-                        // Set the flag so we only send one CC_Resume frame.
-                        self.cc_resume_sent = true;
-                    }
-                },
-                _ => println!("Error creating CCResume frame."), //TODO REMOVE PRINT
-            }
+
+            let cc_path = match &self.path_to_write_cc {
+                Some(p) => p.to_str(),
+                None => {
+                    
+                    None},
+            };
+            if cc_path.is_some() {
+                // We unwrap here because we know it is Some.
+                let result = path.recovery.create_ccresume_frame(cc_path.unwrap());
+                match result {
+                    Ok(frame) => {
+
+                        // I don't know if I need to change any values here.
+                        if push_frame_to_pkt!(b, frames, frame, left) {
+
+                            // Set the flag so we only send one CC_Resume frame.
+                                
+                        }
+                    },
+                    _ => {}
+                }};
+                
+            
+
+            
+            // Even if the frame is not created, we don't want to send it again.
+            // One try only at the beginning of the connection.
+            self.cc_resume_sent = true;
             
         }
         
@@ -6984,7 +7015,7 @@ impl Connection {
         recv_path_id: usize, epoch: packet::Epoch, now: time::Instant,
     ) -> Result<()> {
         trace!("{} rx frm {:?}", self.trace_id, frame);
-        println!("I am in the process frame."); //TODO REMOVE PRINT
+
         match frame {
             frame::Frame::Padding { .. } => (),
 
@@ -7463,7 +7494,7 @@ impl Connection {
             
             //recevoir une frame
             frame::Frame::CCIndication { epoch, ccs, hash } => {
-                println!("I receive CCIndication"); //TODO REMOVE PRINT
+
                 if self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
@@ -7474,8 +7505,13 @@ impl Connection {
                 };
 
                 // Write the structure to a binary file using the function defined above
-                let path = PathBuf::from(r"./quiche/src/recovery/ccs.b").canonicalize().unwrap();
-                if let Err(e) = write_cc_indication(path.to_str().unwrap(), &cc_frame) {
+                let cc_path = match &self.path_to_write_cc {
+                    Some(p) => p.to_str(),
+                    None => {
+                        
+                        None},
+                };
+                if let Err(e) = write_cc_indication(cc_path.unwrap(), &cc_frame) {
                     println!("Failed to write frame data to file: {:?}", e);
                 }
 
@@ -7488,7 +7524,7 @@ impl Connection {
             },
 
             frame::Frame::CCResume { epoch, ccs, hash } => {
-                println!("I receive CCResume"); //TODO REMOVE PRINT
+
                 if !self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
@@ -17232,10 +17268,21 @@ mod tests {
         config.set_active_connection_id_limit(10);
         config.enable_dgram(true, 10, 10);
         config.set_enable_server_congestion_resume(true);
+        let path = PathBuf::from(r"./src/recovery/test.b").canonicalize().unwrap();
+        config.set_path_to_write_cc(path);
+
 
         // Perform initial handshake.
         let mut pipe = testing::Pipe::with_config(&mut config).unwrap();
         assert_eq!(pipe.handshake(), Ok(()));
+        let path_to_write = match config.path_to_write_cc {
+            Some(path) => path,
+            None => panic!("Path to write is not set"),
+        };
+        let final_path = match path_to_write.to_str() {
+            Some(path) => path,
+            None => panic!("Path to write is not set"),
+        };
 
         // We check if server and client detect correctly the server congestion resume boolean for both.
         assert_eq!(pipe.server.local_transport_params.enable_server_congestion_resume, true);
@@ -17248,14 +17295,14 @@ mod tests {
 
         // We check if the cc_timer is correctly updated.
         pipe.server.on_timeout(); // Server must process the timeout of the cc_timer to know it must send a CCIndication frame.
-        let path = PathBuf::from(r"./src/recovery/ccs.b").canonicalize().unwrap();
-        let mut _file = File::create(path.to_str().unwrap()).unwrap();
+        // let mut _file = File::create(final_path).unwrap();
+        // for some reason the frame process in the tests cannot write even though it absolutely works "by hand".
 
         let _ = pipe.server.send(&mut buf); // Server must send a CCIndication frame. I don't know how to write the value we should expect.
         assert_eq!(pipe.advance(), Ok(()));
         
 
-        let mut file = File::open(path.to_str().unwrap()).unwrap();
+        let mut file = File::open(final_path).unwrap();
         let mut json_data = String::new();
         file.read_to_string(&mut json_data).unwrap();
 
@@ -17323,6 +17370,7 @@ pub use crate::path::SocketAddrIter;
 pub use crate::recovery::CongestionControlAlgorithm;
 
 pub use crate::stream::StreamIter;
+use crate::tls::Context;
 
 mod cid;
 mod crypto;

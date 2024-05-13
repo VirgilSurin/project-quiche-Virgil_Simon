@@ -31,6 +31,7 @@ use std::net::ToSocketAddrs;
 
 use std::io::prelude::*;
 
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use std::cell::RefCell;
@@ -131,7 +132,11 @@ pub fn connect(
     config.set_max_connection_window(conn_args.max_window);
     config.set_max_stream_window(conn_args.max_stream_window);
     config.set_enable_server_congestion_resume(conn_args.enable_server_congestion_resume);
-    println!("{}", conn_args.enable_server_congestion_resume); //TODO REMOVE PRINT
+    let pathbuf = PathBuf::from(r".\quiche\src\recovery\ccs.b").canonicalize();
+    if let Ok(path) = pathbuf{
+        config.set_path_to_write_cc(path);
+    }
+    
     let mut keylog = None;
 
     if let Some(keylog_path) = std::env::var_os("SSLKEYLOGFILE") {

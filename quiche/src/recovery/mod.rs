@@ -1228,13 +1228,10 @@ impl Recovery {
 
     }
 
-    pub fn create_ccresume_frame(&self) -> Result<frame::Frame> {
+    pub fn create_ccresume_frame(&self, path: &str) -> Result<frame::Frame> {
         // Read the `CCIndication` frame from the JSON file
-        //let path = PathBuf::from(r".").canonicalize().unwrap();
-        //print!("{:?}\n", path);
-        let path = PathBuf::from(r"./quiche/src/recovery/ccs.b").canonicalize().unwrap();
-        print!("{:?}\n", path);
-        match self.read_cc_indication_from_file(path.to_str().unwrap()) {
+        
+        match self.read_cc_indication_from_file(path) {
             Ok(frame::Frame::CCIndication { epoch, ccs, hash }) => Ok(frame::Frame::CCResume {
                 epoch,
                 ccs,
@@ -2612,7 +2609,7 @@ mod tests {
     fn create_ccindication_frame() {
         let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
         cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
-
+        cfg.set_path_to_write_cc(PathBuf::from(r"./src/recovery/test.b"));
         let r = Recovery::new(&cfg);
 
         let frame = r.create_ccindication_frame();
@@ -2633,11 +2630,16 @@ mod tests {
     fn test_read_cc_ind_from_file(){
         let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
         cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
-
+        cfg.set_path_to_write_cc(PathBuf::from(r"./src/recovery/test.b"));
         let r = Recovery::new(&cfg);
-        let path = PathBuf::from(r"./src/recovery/test.b").canonicalize().unwrap();
-        print!("{:?}\n", path);
-        let frame = r.read_cc_indication_from_file(r"./src/recovery/test.b");
+
+        let cc_path = match &cfg.path_to_write_cc {
+            Some(p) => p.to_str(),
+            None => {
+                
+                None},
+        };
+        let frame = r.read_cc_indication_from_file(cc_path.unwrap());
         // The test should pass as we created a CCIndication frame.
         assert!(matches!(frame, Ok(frame::Frame::CCIndication { epoch: _, ccs: _, hash: _ })));
     }
@@ -2647,14 +2649,22 @@ mod tests {
     fn create_ccresume_frame() {
         let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
         cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
-
+        cfg.set_path_to_write_cc(PathBuf::from(r"./src/recovery/test.b"));
         let r = Recovery::new(&cfg);
+        let cc_path = match &cfg.path_to_write_cc {
+            Some(path) => path.to_str(),
+            None => None,
+        };
+        if cc_path.is_some() {
+            // We unwrap the path as we know it is not None.
+            let frame = r.create_ccresume_frame(cc_path.unwrap());
 
-        let frame = r.create_ccresume_frame();
-
-        // The test should pass as we created a CCResume frame.
-        assert!(!matches!(frame, Err(crate::Error::CongestionControl)));
-        assert!(matches!(frame, Ok(frame::Frame::CCResume { epoch: _, ccs: _, hash: _ })));
+            // The test should pass as we created a CCResume frame.
+            assert!(!matches!(frame, Err(crate::Error::CongestionControl)));
+            assert!(matches!(frame, Ok(frame::Frame::CCResume { epoch: _, ccs: _, hash: _ })));
+        }else {
+            panic!("Path to write CC is not set. Set the path in the config.")
+        }
     }
 
     #[test]
