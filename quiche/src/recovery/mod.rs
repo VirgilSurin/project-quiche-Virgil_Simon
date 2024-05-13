@@ -1222,7 +1222,7 @@ impl Recovery {
 
     pub fn create_ccresume_frame(&self) -> frame::Frame {
         // Read the `CCIndication` frame from the JSON file
-        let cc_indication = match self.read_cc_indication_from_file("css.b") {
+        let cc_indication = match self.read_cc_indication_from_file(r"./src/recovery/test.b") {
             frame::Frame::CCIndication { epoch, ccs, hash } => (epoch, ccs, hash),
             _ => panic!("Error reading the JSON data"),
         };
@@ -1619,6 +1619,8 @@ impl QlogMetrics {
 
 #[cfg(test)]
 mod tests {
+    use std::{any::Any, fs, path::PathBuf};
+
     use super::*;
     use bincode::de;
     use smallvec::smallvec;
@@ -2593,7 +2595,7 @@ mod tests {
 
         let ccs_data = rmp_serde::to_vec(&initial_ccs_data).unwrap();
         let deserialized_data : CCSData = rmp_serde::from_slice(&ccs_data).unwrap();
-
+        // The data should be the same after serialization and deserialization.
         assert_eq!(initial_ccs_data, deserialized_data);
     }
 
@@ -2612,29 +2614,31 @@ mod tests {
             // Not a CCIndication frame. Fail the test.
             _ => Err(crate::Error::InvalidFrame),
         };
-
+        // The test should pass as we created a CCIndication frame.
         assert_eq!(result, Ok(&frame));
     }
 
     #[test]
-    #[ignore]
+    // #[ignore] // Because of the data file for now.
+    // works because we created the file
     fn test_read_cc_ind_from_file(){
         let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
         cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
 
         let r = Recovery::new(&cfg);
 
-        let frame = r.read_cc_indication_from_file("test.b");
+        let frame = r.read_cc_indication_from_file(r"./src/recovery/test.b");
         let result = match &frame {
             frame::Frame::CCIndication { epoch, ccs, hash } => Ok(&frame),
             _ => Err(crate::Error::InvalidFrame),
         };
-        
+        // The test should pass as we created a CCIndication frame.
         assert_eq!(result, Ok(&frame));
     }
 
     #[test]
-    #[ignore] // Because of the data file for now.
+    // #[ignore] // Because of the data file for now.
+    // works because we created the file
     fn create_ccresume_frame() {
         let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
         cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
@@ -2649,7 +2653,7 @@ mod tests {
             // Not a CCResume frame. Fail the test.
             _ => Err(crate::Error::InvalidFrame),
         };
-
+        // The test should pass as we created a CCResume frame.
         assert_eq!(result, Ok(&frame));
     }
 
@@ -2676,12 +2680,31 @@ mod tests {
 
         let result = r.verify_recieved_ccs(&false_css_data, &frame.2);
 
+        // The verification should fail. The hash is different because the ssthresh value has been modified.
         assert_eq!(result, false);
     }
 
     #[test]
     fn test_update_ccs() {
-        todo!("Test update_ccs()");
+        let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
+        cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
+
+        let mut r = Recovery::new(&cfg);
+        let test_thresh = r.ssthresh;
+
+        let frame = match r.create_ccindication_frame() {
+            frame::Frame::CCIndication { epoch, ccs, hash } => {(epoch, ccs, hash)},
+            _ => panic!("Invalid frame type"),
+        };
+
+        r.ssthresh = 1;
+        let false_thresh = r.ssthresh;
+
+        r.update_ccs_data(&frame.1);
+
+        // Checks if the ssthresh has been updated.
+        assert_eq!(r.ssthresh, test_thresh);
+        assert_ne!(r.ssthresh, false_thresh);
     }
 
     

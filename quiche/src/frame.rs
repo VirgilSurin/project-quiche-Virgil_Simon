@@ -387,6 +387,8 @@ impl Frame {
             (packet::Type::ZeroRTT, Frame::PathResponse { .. }) => false,
             (packet::Type::ZeroRTT, Frame::RetireConnectionId { .. }) => false,
             (packet::Type::ZeroRTT, Frame::ConnectionClose { .. }) => false,
+            (packet::Type::ZeroRTT, Frame::CCIndication{ .. }) => false,
+            (packet::Type::ZeroRTT, Frame::CCResume{ .. }) => false,
 
             // ACK, CRYPTO and CONNECTION_CLOSE can be sent on all other packet
             // types.
@@ -2203,5 +2205,102 @@ mod tests {
         };
 
         assert_eq!(frame_data, data);
+    }
+
+    #[test]
+    fn cc_indication() {
+        let mut d = [42; 128];
+
+        let epoch = 69;
+        let ccs = vec![19, 9, 13, 15, 14, 13, 9, 3, 8, 5, 12];
+        let hash = vec![22, 9, 18, 7, 9, 12, 19, 21, 18, 9, 14];
+
+        let frame = Frame::CCIndication {
+            epoch,
+            ccs: ccs.clone(),
+            hash: hash.clone(),
+        };
+
+        let wire_len = {
+            let mut b = octets::OctetsMut::with_slice(&mut d);
+            frame.to_bytes(&mut b).unwrap()
+        };
+ 
+        assert_eq!(wire_len, 34);
+
+        let mut b = octets::Octets::with_slice(&d);
+        // CCIndication is only allowed in 1-RTT (short) packets, as per the specification p. 3.
+        assert_eq!(
+            Frame::from_bytes(&mut b, packet::Type::Short),
+            Ok(frame.clone())
+        );
+
+        let mut b = octets::Octets::with_slice(&d);
+        assert!(Frame::from_bytes(&mut b, packet::Type::Initial).is_err());
+
+        let mut b = octets::Octets::with_slice(&d);
+        assert!(Frame::from_bytes(&mut b, packet::Type::ZeroRTT).is_err());
+
+        let mut b = octets::Octets::with_slice(&d);
+        assert!(Frame::from_bytes(&mut b, packet::Type::Handshake).is_err());
+
+
+        let (frame_epoch, frame_ccs, frame_hash) = match &frame {
+            Frame::CCIndication { epoch, ccs, hash } => (epoch.clone(), ccs.clone(), hash.clone()),
+
+            _ => unreachable!(),
+        };
+
+        assert_eq!(frame_epoch, epoch);
+        assert_eq!(frame_ccs, ccs);
+        assert_eq!(frame_hash, hash);
+    }
+
+    #[test]
+    fn cc_resume(){
+        let mut d = [42; 128];
+
+        let epoch = 69;
+        let ccs = vec![19, 9, 13, 15, 14, 13, 9, 3, 8, 5, 12];
+        let hash = vec![22, 9, 18, 7, 9, 12, 19, 21, 18, 9, 14];
+
+        let frame = Frame::CCResume {
+            epoch,
+            ccs: ccs.clone(),
+            hash: hash.clone(),
+        };
+
+        let wire_len = {
+            let mut b = octets::OctetsMut::with_slice(&mut d);
+            frame.to_bytes(&mut b).unwrap()
+        };
+
+        assert_eq!(wire_len, 34);
+
+        let mut b = octets::Octets::with_slice(&d);
+        // CCResume is only allowed in 1-RTT (short) packets, as per the specification p. 3.
+        assert_eq!(
+            Frame::from_bytes(&mut b, packet::Type::Short),
+            Ok(frame.clone())
+        );
+
+        let mut b = octets::Octets::with_slice(&d);
+        assert!(Frame::from_bytes(&mut b, packet::Type::Initial).is_err());
+
+        let mut b = octets::Octets::with_slice(&d);
+        assert!(Frame::from_bytes(&mut b, packet::Type::ZeroRTT).is_err());
+
+        let mut b = octets::Octets::with_slice(&d);
+        assert!(Frame::from_bytes(&mut b, packet::Type::Handshake).is_err());
+
+        let (frame_epoch, frame_ccs, frame_hash) = match &frame {
+            Frame::CCResume { epoch, ccs, hash } => (epoch.clone(), ccs.clone(), hash.clone()),
+
+            _ => unreachable!(),
+        };
+
+        assert_eq!(frame_epoch, epoch);
+        assert_eq!(frame_ccs, ccs);
+        assert_eq!(frame_hash, hash);
     }
 }

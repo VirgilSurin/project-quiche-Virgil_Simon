@@ -6741,9 +6741,9 @@ impl Connection {
         self.peer_transport_params = peer_params;
 
         self.enable_server_congestion_resume = self.peer_transport_params.enable_server_congestion_resume && self.local_transport_params.enable_server_congestion_resume;
-        println!("RES: {:?}", self.enable_server_congestion_resume);
-        println!("Peer: {:?}", self.peer_transport_params.enable_server_congestion_resume);
-        println!("Local: {:?}", self.local_transport_params.enable_server_congestion_resume);
+        // println!("RES: {:?}", self.enable_server_congestion_resume);
+        // println!("Peer: {:?}", self.peer_transport_params.enable_server_congestion_resume);
+        // println!("Local: {:?}", self.local_transport_params.enable_server_congestion_resume);
 
         Ok(())
     }
@@ -7445,7 +7445,7 @@ impl Connection {
 
                 // Write the structure to a binary file using the function defined above
                 if let Err(e) = write_cc_indication("ccs.b", &cc_frame) {
-                    println!("Failed to write frame data to file: {:?}", e);
+                    //println!("Failed to write frame data to file: {:?}", e);
                 }
 
                 // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
@@ -17179,9 +17179,12 @@ mod tests {
         assert_eq!(pmtu_param.get_probe_status(), true);
     }
 
+    fn process_cc_indication() {
+        
+    }
+
     #[test]
     fn test_write() {
-
         let mut config = Config::new(crate::PROTOCOL_VERSION).unwrap();
         config
             .load_cert_chain_from_pem_file("examples/cert.crt")

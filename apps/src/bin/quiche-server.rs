@@ -241,7 +241,7 @@ fn main() {
                 quiche::MAX_CONN_ID_LEN,
             ) {
                 Ok(v) => {
-                    println!("{:?}", conn_args.enable_server_congestion_resume);
+                    //println!("{:?}", conn_args.enable_server_congestion_resume);
                     v
                 },
 
