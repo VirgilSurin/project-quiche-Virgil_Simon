@@ -1198,40 +1198,40 @@ impl Recovery {
         }
     }
 
-    fn read_cc_indication_from_file(&self, file_path: &str) -> frame::Frame {
+    fn read_cc_indication_from_file(&self, file_path: &str) -> Result<frame::Frame> {
         // Open and read the JSON file
-        let mut file = File::open(file_path).unwrap();
+        let mut file = match File::open(file_path){
+            Ok(file) => file,
+            Err(_) => return Err(crate::Error::CongestionControl),
+        };
         let mut json_data = String::new();
-        file.read_to_string(&mut json_data).unwrap();
+        let _result = file.read_to_string(&mut json_data);
 
-        let frame_data: serde_json::Value = serde_json::from_str(&json_data).unwrap();
-        if let (Some(epoch), Some(ccs), Some(hash)) = (
-            frame_data.get("epoch").and_then(|v| v.as_u64()),
-            frame_data.get("ccs").and_then(|v| serde_json::from_value(v.clone()).ok()),
-            frame_data.get("hash").and_then(|v| serde_json::from_value(v.clone()).ok())
-        ) {
-            frame::Frame::CCIndication {
+        let frame_data: std::prelude::v1::Result< serde_json::Value, serde_json::Error> = serde_json::from_str(&json_data);
+        let frame_extact = match &frame_data {
+            Ok(frame_data) => {
+                (frame_data.get("epoch").and_then(|v| v.as_u64()), 
+                frame_data.get("ccs").and_then(|v| serde_json::from_value(v.clone()).ok()),
+                frame_data.get("hash").and_then(|v| serde_json::from_value(v.clone()).ok()))                
+            },
+            Err(_) => {(None, None, None)},
+        };
+        match frame_extact {
+            (Some(epoch), Some(ccs), Some(hash)) => Ok(frame::Frame::CCIndication{epoch, ccs, hash}),
+            _ => Err(crate::Error::CongestionControl),
+        }
+
+    }
+
+    pub fn create_ccresume_frame(&self) -> Result<frame::Frame> {
+        // Read the `CCIndication` frame from the JSON file
+        match self.read_cc_indication_from_file(r"./src/recovery/ccs.b") {
+            Ok(frame::Frame::CCIndication { epoch, ccs, hash }) => Ok(frame::Frame::CCResume {
                 epoch,
                 ccs,
                 hash,
-            }
-        } else {
-            panic!("Error reading the JSON data");
-        }
-    }
-
-    pub fn create_ccresume_frame(&self) -> frame::Frame {
-        // Read the `CCIndication` frame from the JSON file
-        let cc_indication = match self.read_cc_indication_from_file(r"./src/recovery/ccs.b") {
-            frame::Frame::CCIndication { epoch, ccs, hash } => (epoch, ccs, hash),
-            _ => panic!("Error reading the JSON data"),
-        };
-
-        // Create and return a `CCResume` frame using the extracted data
-        frame::Frame::CCResume {
-            epoch: cc_indication.0,
-            ccs: cc_indication.1,
-            hash: cc_indication.2,
+            }),
+            _ => Err(crate::Error::CongestionControl),
         }
     }
 
@@ -2628,12 +2628,8 @@ mod tests {
         let r = Recovery::new(&cfg);
 
         let frame = r.read_cc_indication_from_file(r"./src/recovery/test.b");
-        let result = match &frame {
-            frame::Frame::CCIndication { epoch, ccs, hash } => Ok(&frame),
-            _ => Err(crate::Error::InvalidFrame),
-        };
         // The test should pass as we created a CCIndication frame.
-        assert_eq!(result, Ok(&frame));
+        assert!(matches!(frame, Ok(frame::Frame::CCIndication { epoch: _, ccs: _, hash: _ })));
     }
 
     #[test]
@@ -2646,14 +2642,8 @@ mod tests {
 
         let frame = r.create_ccresume_frame();
 
-        let result = match &frame {
-            // Ok we have a CCResume frame. Pass the test.
-            frame::Frame::CCResume { epoch: _, ccs: _, hash: _ } => Ok(&frame),
-            // Not a CCResume frame. Fail the test.
-            _ => Err(crate::Error::InvalidFrame),
-        };
         // The test should pass as we created a CCResume frame.
-        assert_eq!(result, Ok(&frame));
+        assert!(matches!(frame, Ok(frame::Frame::CCResume { epoch: _, ccs: _, hash: _ })));
     }
 
     #[test]

@@ -3490,6 +3490,8 @@ impl Connection {
             return Err(Error::Done);
         }
 
+        println!("I am in the send Single."); //TODO REMOVE PRINT
+
         let is_closing = self.local_error.is_some();
 
         let out_len = out.len();
@@ -4249,11 +4251,17 @@ impl Connection {
         }
 
         // Create CC_Indication frame if is server.
-        if self.is_server && self.local_transport_params.enable_server_congestion_resume && self.peer_transport_params.enable_server_congestion_resume && pkt_type == packet::Type::Short && self.cc_timer_passed && path.active()  {
+        if self.is_server 
+            && self.local_transport_params.enable_server_congestion_resume 
+            && self.peer_transport_params.enable_server_congestion_resume 
+            && (pkt_type == packet::Type::Short) && self.cc_timer_passed 
+            && path.active()  {
+            println!("I am in the CCIndication sending."); //TODO REMOVE PRINT
             let frame = path.recovery.create_ccindication_frame();
-
+            println!("I created CCIndication."); //TODO REMOVE PRINT
             // I don't know if I need to change any values here.
             push_frame_to_pkt!(b, frames, frame, left);
+            println!("I sent CCIndication."); //TODO REMOVE PRINT
             // Reset the timer so a timeout can happen again.
             self.cc_timer_passed = false;
 
@@ -4262,13 +4270,27 @@ impl Connection {
         }
 
         // Create CC_Resume frame if is client.
-        if (!self.is_server) && self.local_transport_params.enable_server_congestion_resume && self.peer_transport_params.enable_server_congestion_resume && pkt_type == packet::Type::Short && (!self.cc_resume_sent) && path.active()  {
-            let frame = path.recovery.create_ccresume_frame();
-
-            // I don't know if I need to change any values here.
-            push_frame_to_pkt!(b, frames, frame, left);
-            // Set the flag so we only send one CC_Resume frame.
-            self.cc_resume_sent = true;
+        if (!self.is_server) 
+        && self.local_transport_params.enable_server_congestion_resume 
+        && self.peer_transport_params.enable_server_congestion_resume 
+        && (pkt_type == packet::Type::Short) 
+        && (!self.cc_resume_sent) 
+        && path.active()  {
+            println!("I am in the CCResume sending."); //TODO REMOVE PRINT
+            let result = path.recovery.create_ccresume_frame();
+            match result {
+                Ok(frame) => {
+                    println!("I created CCResume."); //TODO REMOVE PRINT
+                    // I don't know if I need to change any values here.
+                    if push_frame_to_pkt!(b, frames, frame, left) {
+                        println!("I sent CCResume."); //TODO REMOVE PRINT
+                        // Set the flag so we only send one CC_Resume frame.
+                        self.cc_resume_sent = true;
+                    }
+                },
+                _ => println!("Error creating CCResume frame."), //TODO REMOVE PRINT
+            }
+            
         }
         
 
@@ -7439,6 +7461,7 @@ impl Connection {
             
             //recevoir une frame
             frame::Frame::CCIndication { epoch, ccs, hash } => {
+                println!("I receive CCIndication"); //TODO REMOVE PRINT
                 if self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
@@ -7462,6 +7485,7 @@ impl Connection {
             },
 
             frame::Frame::CCResume { epoch, ccs, hash } => {
+                println!("I receive CCResume"); //TODO REMOVE PRINT
                 if !self.is_server() {
                     return Err(Error::ProtocolViolation);
                 }
@@ -17274,8 +17298,8 @@ mod tests {
             ccs: ccs_data,
             hash: hash_data,
         };
-        write_cc_indication("//tmp/test.b", &indication);
-        assert!(Path::new("//tmp/test.b").exists());
+        write_cc_indication(r"./src/recovery/test.b", &indication);
+        assert!(Path::new(r"./src/recovery/test.b").exists());
     }
 
 }
