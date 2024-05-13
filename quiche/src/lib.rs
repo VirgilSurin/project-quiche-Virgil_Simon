@@ -418,6 +418,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::time::Duration;
 use unix_time::Instant as UnixTimeInstant;
+use std::thread;
 
 use smallvec::SmallVec;
 
@@ -756,10 +757,9 @@ pub struct Config {
     max_stream_window: u64,
 
     disable_dcid_reuse: bool,
-
-    enable_server_congestion_resume: bool,
 }
 
+// TODO: do all of this again in a barely decent way if possible ;-;
 fn write_cc_indication(file_path: &str, frame: &frame::Frame) -> Result<()> {
     let frame_data = if let frame::Frame::CCIndication { epoch, ccs, hash } = frame {
         json!({
@@ -865,8 +865,6 @@ impl Config {
             max_stream_window: stream::MAX_STREAM_WINDOW,
 
             disable_dcid_reuse: false,
-
-            enable_server_congestion_resume: false,
         })
     }
 
@@ -1331,7 +1329,7 @@ impl Config {
     }
 
     pub fn set_enable_server_congestion_resume(&mut self, v: bool) {
-        self.enable_server_congestion_resume = v;
+        self.local_transport_params.enable_server_congestion_resume = v;
     }
 }
 
@@ -1860,6 +1858,13 @@ impl Connection {
             reset_token,
         );
 
+        let cc_timer;
+        if is_server && config.local_transport_params.enable_server_congestion_resume {
+            cc_timer = Some(time::Instant::now());
+        } else {
+            cc_timer = None;
+        }
+
         let mut conn = Connection {
             version: config.version,
 
@@ -1938,7 +1943,7 @@ impl Connection {
 
             draining_timer: None,
 
-            cc_timer: None,
+            cc_timer,
 
             cc_timer_passed: false,
 
@@ -7444,7 +7449,7 @@ impl Connection {
                 };
 
                 // Write the structure to a binary file using the function defined above
-                if let Err(e) = write_cc_indication("ccs.b", &cc_frame) {
+                if let Err(e) = write_cc_indication(r"./src/recovery/ccs.b", &cc_frame) {
                     //println!("Failed to write frame data to file: {:?}", e);
                 }
 
@@ -17181,10 +17186,61 @@ mod tests {
 
     #[test]
     fn process_cc_indication() {
-        
+        let mut buf = [0; 65535];
+        let mut config = Config::new(crate::PROTOCOL_VERSION).unwrap();
+        config
+            .load_cert_chain_from_pem_file("examples/cert.crt")
+            .unwrap();
+        config
+            .load_priv_key_from_pem_file("examples/cert.key")
+            .unwrap();
+        config
+            .set_application_protos(&[b"proto1", b"proto2"])
+            .unwrap();
+        config.verify_peer(false);
+        config.set_initial_max_data(100000);
+        config.set_initial_max_stream_data_bidi_local(100000);
+        config.set_initial_max_stream_data_bidi_remote(100000);
+        config.set_initial_max_streams_bidi(10);
+        config.set_active_connection_id_limit(10);
+        config.enable_dgram(true, 10, 10);
+        config.set_enable_server_congestion_resume(true);
+
+        // Perform initial handshake.
+        let mut pipe = testing::Pipe::with_config(&mut config).unwrap();
+        assert_eq!(pipe.handshake(), Ok(()));
+
+        // We check if server and client detect correctly the server congestion resume boolean for both.
+        assert_eq!(pipe.server.local_transport_params.enable_server_congestion_resume, true);
+        assert_eq!(pipe.server.peer_transport_params.enable_server_congestion_resume, true);
+        assert_eq!(pipe.client.local_transport_params.enable_server_congestion_resume, true);
+        assert_eq!(pipe.client.peer_transport_params.enable_server_congestion_resume, true);
+
+        // By defaut the cc_timer is 60 seconds.
+        thread::sleep(time::Duration::from_millis(1000));
+
+        // We check if the cc_timer is correctly updated.
+        pipe.server.on_timeout(); // Server must process the timeout of the cc_timer to know it must send a CCIndication frame.
+
+        let _ = pipe.server.send(&mut buf); // Server must send a CCIndication frame. I don't know how to write the value we should expect.
+        assert_eq!(pipe.advance(), Ok(()));
+
+        let mut file = File::open(r"./src/recovery/ccs.b").unwrap();
+        let mut json_data = String::new();
+        file.read_to_string(&mut json_data).unwrap();
+
+        let frame_data: serde_json::Value = serde_json::from_str(&json_data).unwrap();
+        let frame_data_extract = (frame_data.get("epoch").and_then(|v| v.as_u64()),
+        frame_data.get("ccs").and_then(|v| serde_json::from_value(v.clone()).ok()),
+        frame_data.get("hash").and_then(|v| serde_json::from_value(v.clone()).ok()));
+        let frame = match frame_data_extract {
+            (Some(epoch), Some(ccs), Some(hash)) => {Ok(frame::Frame::CCIndication { epoch, ccs, hash})},
+            _ => Err(Error::InvalidFrame),
+        };
+        assert!(matches!(frame, Ok(frame::Frame::CCIndication { epoch: _, ccs: _, hash: _})));        
     }
 
-
+    
 }
 
 pub use crate::packet::ConnectionId;

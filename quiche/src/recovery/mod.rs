@@ -1222,7 +1222,7 @@ impl Recovery {
 
     pub fn create_ccresume_frame(&self) -> frame::Frame {
         // Read the `CCIndication` frame from the JSON file
-        let cc_indication = match self.read_cc_indication_from_file(r"./src/recovery/test.b") {
+        let cc_indication = match self.read_cc_indication_from_file(r"./src/recovery/ccs.b") {
             frame::Frame::CCIndication { epoch, ccs, hash } => (epoch, ccs, hash),
             _ => panic!("Error reading the JSON data"),
         };
@@ -2637,8 +2637,7 @@ mod tests {
     }
 
     #[test]
-    // #[ignore] // Because of the data file for now.
-    // works because we created the file
+    // #[ignore] // Because of the data file. Passes if the file path is changed in create_ccresume_frame().
     fn create_ccresume_frame() {
         let mut cfg = crate::Config::new(crate::PROTOCOL_VERSION).unwrap();
         cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
