@@ -406,6 +406,7 @@ use stream::StreamPriorityKey;
 
 use std::cmp;
 use std::convert::TryInto;
+use std::path::PathBuf;
 use std::time;
 
 use std::sync::Arc;
@@ -768,7 +769,7 @@ fn write_cc_indication(file_path: &str, frame: &frame::Frame) -> Result<()> {
             "hash": hash
         })
     } else {
-        panic!("Error, not a CCIndication frame");
+        return Err(crate::Error::CongestionControl);
     };
 
     let json_string = serde_json::to_string_pretty(&frame_data).expect("Failed to serialize frame to JSON");
@@ -1945,7 +1946,7 @@ impl Connection {
 
             cc_timer,
 
-            cc_timer_passed: false,
+            cc_timer_passed: true,
 
             cc_resume_sent: false,
 
@@ -3490,7 +3491,7 @@ impl Connection {
             return Err(Error::Done);
         }
 
-        println!("I am in the send Single."); //TODO REMOVE PRINT
+        println!("I am in the send single."); //TODO REMOVE PRINT
 
         let is_closing = self.local_error.is_some();
 
@@ -4254,19 +4255,20 @@ impl Connection {
         if self.is_server 
             && self.local_transport_params.enable_server_congestion_resume 
             && self.peer_transport_params.enable_server_congestion_resume 
-            && (pkt_type == packet::Type::Short) && self.cc_timer_passed 
+            && (pkt_type == packet::Type::Short) 
+            && self.cc_timer_passed 
             && path.active()  {
             println!("I am in the CCIndication sending."); //TODO REMOVE PRINT
             let frame = path.recovery.create_ccindication_frame();
             println!("I created CCIndication."); //TODO REMOVE PRINT
             // I don't know if I need to change any values here.
-            push_frame_to_pkt!(b, frames, frame, left);
-            println!("I sent CCIndication."); //TODO REMOVE PRINT
-            // Reset the timer so a timeout can happen again.
-            self.cc_timer_passed = false;
-
-            // A timer so we don't send too many CC_Indication frames.
-            self.cc_timer = Some(now + Duration::from_secs(60));
+            if push_frame_to_pkt!(b, frames, frame, left){
+                println!("I sent CCIndication."); //TODO REMOVE PRINT
+                // Reset the timer so a timeout can happen again.
+                self.cc_timer_passed = false;
+                // A timer so we don't send too many CC_Indication frames.
+                self.cc_timer = Some(now + Duration::from_secs(60));
+            }
         }
 
         // Create CC_Resume frame if is client.
@@ -6982,7 +6984,7 @@ impl Connection {
         recv_path_id: usize, epoch: packet::Epoch, now: time::Instant,
     ) -> Result<()> {
         trace!("{} rx frm {:?}", self.trace_id, frame);
-
+        println!("I am in the process frame."); //TODO REMOVE PRINT
         match frame {
             frame::Frame::Padding { .. } => (),
 
@@ -7472,8 +7474,9 @@ impl Connection {
                 };
 
                 // Write the structure to a binary file using the function defined above
-                if let Err(e) = write_cc_indication(r"./src/recovery/ccs.b", &cc_frame) {
-                    //println!("Failed to write frame data to file: {:?}", e);
+                let path = PathBuf::from(r"./quiche/src/recovery/ccs.b").canonicalize().unwrap();
+                if let Err(e) = write_cc_indication(path.to_str().unwrap(), &cc_frame) {
+                    println!("Failed to write frame data to file: {:?}", e);
                 }
 
                 // We tough that it would be a good idea to encrypt the file where the congestion control state it stored for privacy and security reason.
@@ -17245,11 +17248,14 @@ mod tests {
 
         // We check if the cc_timer is correctly updated.
         pipe.server.on_timeout(); // Server must process the timeout of the cc_timer to know it must send a CCIndication frame.
+        let path = PathBuf::from(r"./src/recovery/ccs.b").canonicalize().unwrap();
+        let mut _file = File::create(path.to_str().unwrap()).unwrap();
 
         let _ = pipe.server.send(&mut buf); // Server must send a CCIndication frame. I don't know how to write the value we should expect.
         assert_eq!(pipe.advance(), Ok(()));
+        
 
-        let mut file = File::open(r"./src/recovery/ccs.b").unwrap();
+        let mut file = File::open(path.to_str().unwrap()).unwrap();
         let mut json_data = String::new();
         file.read_to_string(&mut json_data).unwrap();
 
@@ -17298,8 +17304,10 @@ mod tests {
             ccs: ccs_data,
             hash: hash_data,
         };
-        write_cc_indication(r"./src/recovery/test.b", &indication);
-        assert!(Path::new(r"./src/recovery/test.b").exists());
+        let path = PathBuf::from(r"./src/recovery/ccs.b").canonicalize().unwrap();
+        let result = write_cc_indication(path.to_str().unwrap(), &indication);
+        assert!(Path::new(path.to_str().unwrap()).exists());
+        assert_eq!(result, Ok(()));
     }
 
 }

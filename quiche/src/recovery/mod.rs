@@ -28,6 +28,7 @@ use std::cmp;
 
 use std::fs::File;
 use std::io::{Read, Error as IoError};
+use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use bincode;
 use std::str::FromStr;
@@ -211,6 +212,8 @@ pub struct CCSData {
     ssthresh: usize,
     ccsdata: Vec<u8>,
 }
+
+
 
 impl Recovery {
     pub fn new_with_config(recovery_config: &RecoveryConfig) -> Self {
@@ -1202,7 +1205,9 @@ impl Recovery {
         // Open and read the JSON file
         let mut file = match File::open(file_path){
             Ok(file) => file,
-            Err(_) => return Err(crate::Error::CongestionControl),
+            Err(_) => {
+                println!("Error: Could not open the file");
+                return Err(crate::Error::CongestionControl)},
         };
         let mut json_data = String::new();
         let _result = file.read_to_string(&mut json_data);
@@ -1225,7 +1230,11 @@ impl Recovery {
 
     pub fn create_ccresume_frame(&self) -> Result<frame::Frame> {
         // Read the `CCIndication` frame from the JSON file
-        match self.read_cc_indication_from_file(r"./src/recovery/ccs.b") {
+        //let path = PathBuf::from(r".").canonicalize().unwrap();
+        //print!("{:?}\n", path);
+        let path = PathBuf::from(r"./quiche/src/recovery/ccs.b").canonicalize().unwrap();
+        print!("{:?}\n", path);
+        match self.read_cc_indication_from_file(path.to_str().unwrap()) {
             Ok(frame::Frame::CCIndication { epoch, ccs, hash }) => Ok(frame::Frame::CCResume {
                 epoch,
                 ccs,
@@ -2626,7 +2635,8 @@ mod tests {
         cfg.set_cc_algorithm(CongestionControlAlgorithm::CUBIC);
 
         let r = Recovery::new(&cfg);
-
+        let path = PathBuf::from(r"./src/recovery/test.b").canonicalize().unwrap();
+        print!("{:?}\n", path);
         let frame = r.read_cc_indication_from_file(r"./src/recovery/test.b");
         // The test should pass as we created a CCIndication frame.
         assert!(matches!(frame, Ok(frame::Frame::CCIndication { epoch: _, ccs: _, hash: _ })));
@@ -2643,6 +2653,7 @@ mod tests {
         let frame = r.create_ccresume_frame();
 
         // The test should pass as we created a CCResume frame.
+        assert!(!matches!(frame, Err(crate::Error::CongestionControl)));
         assert!(matches!(frame, Ok(frame::Frame::CCResume { epoch: _, ccs: _, hash: _ })));
     }
 
