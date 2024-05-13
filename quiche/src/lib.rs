@@ -8954,7 +8954,7 @@ pub mod testing {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use std::path::Path;
     #[test]
     fn transport_params() {
         // Server encodes, client decodes.
@@ -17237,10 +17237,47 @@ mod tests {
             (Some(epoch), Some(ccs), Some(hash)) => {Ok(frame::Frame::CCIndication { epoch, ccs, hash})},
             _ => Err(Error::InvalidFrame),
         };
-        assert!(matches!(frame, Ok(frame::Frame::CCIndication { epoch: _, ccs: _, hash: _})));        
+        assert!(matches!(frame, Ok(frame::Frame::CCIndication { epoch: _, ccs: _, hash: _})));
     }
 
-    
+    #[test]
+    fn test_write() {
+        let mut config = Config::new(crate::PROTOCOL_VERSION).unwrap();
+        config
+            .load_cert_chain_from_pem_file("examples/cert.crt")
+            .unwrap();
+        config
+            .load_priv_key_from_pem_file("examples/cert.key")
+            .unwrap();
+        config
+            .set_application_protos(&[b"proto1", b"proto2"])
+            .unwrap();
+        config.verify_peer(false);
+        config.set_initial_max_data(100000);
+        config.set_initial_max_stream_data_bidi_local(100000);
+        config.set_initial_max_stream_data_bidi_remote(100000);
+        config.set_initial_max_streams_bidi(2);
+        config.set_active_connection_id_limit(4);
+        config.set_max_send_udp_payload_size(1350);
+        config.set_max_recv_udp_payload_size(1350);
+        config.discover_pmtu(true);
+
+        // Perform initial handshake.
+        let mut pipe = testing::Pipe::with_config(&mut config).unwrap();
+        assert_eq!(pipe.handshake(), Ok(()));
+
+        let ccs_data = vec![1, 2, 3, 4];  // Example CCS data
+        let hash_data = vec![5, 6, 7, 8];  // Example hash data
+
+        let indication = frame::Frame::CCIndication {
+            epoch: 123,
+            ccs: ccs_data,
+            hash: hash_data,
+        };
+        write_cc_indication("//tmp/test.b", &indication);
+        assert!(Path::new("//tmp/test.b").exists());
+    }
+
 }
 
 pub use crate::packet::ConnectionId;
